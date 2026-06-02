@@ -26,3 +26,6 @@
 ## 4. Thuật toán GDA (Gradient Descent Algorithm)
 
 -
+
+## 5. Bài tập về nhà
+Tìm hiểu thuật toán Lan truyền ngược (backpropagation) trong huấn luyện mạng MLP (MultiLayer Perceptron), trình bày lý thuyết (chi tiết) và code
