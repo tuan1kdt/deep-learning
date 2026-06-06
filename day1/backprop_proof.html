@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chứng minh công thức sai số lớp ẩn — Backpropagation</title>
+<script>
+  MathJax = {
+    tex: { inlineMath: [['\\(', '\\)'], ['$', '$']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+    svg: { fontCache: 'global' }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>
+<style>
+  :root {
+    --bg: #0f1117;
+    --card: #1a1d27;
+    --card2: #21252f;
+    --ink: #e7e9ee;
+    --muted: #9aa3b2;
+    --accent: #ff7a45;   /* cam: lỗi truyền ngược */
+    --green: #5fd38d;     /* xanh: đạo hàm kích hoạt */
+    --blue: #6db3f2;
+    --line: #2c3140;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.7; font-size: 17px;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px 96px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; }
+  h1 .sub { display: block; font-size: 16px; color: var(--muted); font-weight: 400; margin-top: 6px; }
+  h2 {
+    font-size: 22px; margin: 48px 0 16px; padding-left: 14px;
+    border-left: 4px solid var(--accent);
+  }
+  h3 { font-size: 18px; margin: 28px 0 8px; color: var(--blue); }
+  p { margin: 12px 0; }
+  .lead { color: var(--muted); }
+  .formula-hero {
+    background: #000; border-radius: 14px; padding: 28px 20px; margin: 24px 0;
+    text-align: center; font-size: 22px; border: 1px solid var(--line);
+    overflow-x: auto;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 22px; margin: 18px 0;
+  }
+  .step {
+    background: var(--card); border: 1px solid var(--line);
+    border-left: 4px solid var(--blue);
+    border-radius: 10px; padding: 16px 22px; margin: 18px 0;
+  }
+  .step .tag {
+    display: inline-block; font-size: 13px; font-weight: 700; letter-spacing: .04em;
+    color: var(--blue); text-transform: uppercase; margin-bottom: 4px;
+  }
+  .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 20px 0; }
+  .three .box { background: var(--card2); border-radius: 10px; padding: 14px 16px; }
+  .three .box.c1 { border-top: 3px solid var(--accent); }
+  .three .box.c2 { border-top: 3px solid var(--green); }
+  .three .box.c3 { border-top: 3px solid var(--blue); }
+  .three .box b { font-size: 15px; }
+  .three .box p { font-size: 14.5px; color: var(--muted); margin: 8px 0 0; }
+  code {
+    background: #11141b; padding: 2px 7px; border-radius: 5px;
+    font-family: "SF Mono", "Fira Code", Menlo, monospace; font-size: 14px; color: #ffd9a0;
+  }
+  pre {
+    background: #11141b; border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px; overflow-x: auto; font-size: 13.5px; line-height: 1.6;
+  }
+  pre code { background: none; padding: 0; color: #cfe3ff; }
+  .accent { color: var(--accent); }
+  .green { color: var(--green); }
+  .muted { color: var(--muted); }
+  .check {
+    background: linear-gradient(180deg, #16241b, #131a16);
+    border: 1px solid #2e6b46; border-radius: 12px; padding: 20px 22px; margin: 20px 0;
+  }
+  .check table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14.5px; }
+  .check th, .check td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #243a2c; }
+  .check th { color: var(--green); font-weight: 600; }
+  .check td.num { font-family: "SF Mono", Menlo, monospace; color: #d6ffe6; }
+  .verdict { font-weight: 700; font-size: 16px; margin-top: 10px; }
+  .verdict.ok { color: var(--green); }
+  .note { font-size: 14.5px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 12px; margin-top: 18px; }
+  .pill { display:inline-block; background:#11141b; border:1px solid var(--line); border-radius:999px; padding:2px 12px; font-size:13px; color:var(--muted); }
+  @media (max-width: 640px) { .three { grid-template-columns: 1fr; } .formula-hero { font-size: 18px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Chứng minh công thức sai số tại lớp ẩn
+    <span class="sub">Trái tim của thuật toán Backpropagation — suy ra từ quy tắc chain rule</span>
+  </h1>
+
+  <div class="formula-hero">
+    $$\delta^l = \big((W^{l+1})^\top\, \delta^{l+1}\big) \odot g'^{\,l}(z^l), \qquad l = L{-}1, L{-}2, \dots, 1$$
+  </div>
+
+  <p class="lead">Công thức này nói: <b>muốn biết sai số tại một lớp ẩn, hãy lấy sai số của lớp ngay sau nó,
+  kéo ngược qua ma trận trọng số, rồi nhân với độ nhạy của hàm kích hoạt.</b> Dưới đây ta chứng minh nó
+  chỉ bằng định nghĩa đạo hàm + chain rule, sau đó kiểm chứng bằng con số thật.</p>
+
+  <!-- ===================== 1. KÝ HIỆU ===================== -->
+  <h2>1. Quy ước ký hiệu</h2>
+  <div class="card">
+    <p>Một mạng nơ-ron lan truyền xuôi (forward) theo từng lớp \(l = 1, 2, \dots, L\):</p>
+    $$z^l = W^l\, a^{l-1} + b^l \qquad\text{(tổ hợp tuyến tính — “pre-activation”)}$$
+    $$a^l = g^l(z^l) \qquad\text{(qua hàm kích hoạt, ví dụ ReLU/sigmoid)}$$
+    <p>Trong đó:</p>
+    <ul>
+      <li>\(z^l\): vector pre-activation của lớp \(l\) (chưa qua hàm kích hoạt).</li>
+      <li>\(a^l\): activation, tức \(g\) áp lên \(z^l\) theo từng phần tử.</li>
+      <li>\(W^{l}\): ma trận trọng số lớp \(l\), kích thước \((n_l \times n_{l-1})\). Hàng \(k\) cột \(j\) là \(W^l_{kj}\).</li>
+      <li>\(L\): hàm mất mát (loss) cuối cùng — một con số vô hướng.</li>
+    </ul>
+    <p><b>Định nghĩa “sai số” \(\delta^l\)</b> — đây là điểm mấu chốt người ta hay bỏ qua:</p>
+    $$\boxed{\;\delta^l \;\equiv\; \frac{\partial L}{\partial z^l}\;}$$
+    <p class="muted">Tức \(\delta^l_j = \dfrac{\partial L}{\partial z^l_j}\): “nếu vặn pre-activation của neuron \(j\) ở lớp \(l\)
+    lên một chút, loss đổi bao nhiêu?”. Nó <i>không</i> phải sai số kiểu \(y-\hat y\); nó là <b>độ nhạy của loss theo \(z^l\)</b>.</p>
+  </div>
+
+  <!-- ===================== 2. ĐIỂM TỰA ===================== -->
+  <h2>2. Điểm tựa: ta đã có sai số của lớp sau \(\delta^{l+1}\)</h2>
+  <p>Backprop chạy <b>ngược</b>, từ lớp cuối về đầu. Khi đang ở lớp \(l\), ta <b>đã tính xong</b> \(\delta^{l+1}=\dfrac{\partial L}{\partial z^{l+1}}\)
+  ở bước trước. Mục tiêu: dùng \(\delta^{l+1}\) để suy ra \(\delta^{l}\). Đó là một bước <b>quy nạp lùi</b>.</p>
+
+  <div class="card">
+    <p><b>Câu hỏi then chốt:</b> \(z^l_j\) ảnh hưởng tới loss \(L\) <i>qua con đường nào?</i></p>
+    <p>Chỉ có đúng một con đường: \(z^l_j \to a^l_j \to\) tất cả các \(z^{l+1}_k\) của lớp sau \(\to \dots \to L\).</p>
+    <p>Cụ thể, \(a^l_j = g(z^l_j)\) đi vào <b>mọi</b> neuron \(k\) của lớp \(l{+}1\):</p>
+    $$z^{l+1}_k = \sum_{i} W^{l+1}_{ki}\, a^l_i + b^{l+1}_k$$
+    <p class="muted">Vì \(z^l_j\) tác động lên loss thông qua <b>nhiều</b> đường (qua từng \(z^{l+1}_k\)), chain rule sẽ thành một <b>tổng</b> trên \(k\).</p>
+  </div>
+
+  <!-- ===================== 3. CHỨNG MINH ===================== -->
+  <h2>3. Chứng minh từng bước (chain rule)</h2>
+
+  <div class="step">
+    <span class="tag">Bước 1 — Chain rule nhiều đường</span>
+    <p>Vì \(z^l_j\) chỉ chạm tới \(L\) thông qua các \(z^{l+1}_k\), ta cộng đóng góp qua từng \(k\):</p>
+    $$\delta^l_j = \frac{\partial L}{\partial z^l_j}
+      = \sum_k \frac{\partial L}{\partial z^{l+1}_k}\cdot \frac{\partial z^{l+1}_k}{\partial z^l_j}
+      = \sum_k \delta^{l+1}_k \cdot \frac{\partial z^{l+1}_k}{\partial z^l_j}$$
+    <p class="muted">Ta vừa thay \(\dfrac{\partial L}{\partial z^{l+1}_k}=\delta^{l+1}_k\) — chính cái đã biết từ lớp sau.</p>
+  </div>
+
+  <div class="step">
+    <span class="tag">Bước 2 — Tính đạo hàm cục bộ \(\partial z^{l+1}_k / \partial z^l_j\)</span>
+    <p>Thay \(a^l_i = g(z^l_i)\) vào biểu thức của \(z^{l+1}_k\):</p>
+    $$z^{l+1}_k = \sum_{i} W^{l+1}_{ki}\, g(z^l_i) + b^{l+1}_k$$
+    <p>Lấy đạo hàm theo \(z^l_j\). Trong tổng, chỉ số hạng \(i=j\) còn lại (các \(i\neq j\) không chứa \(z^l_j\)):</p>
+    $$\frac{\partial z^{l+1}_k}{\partial z^l_j} = W^{l+1}_{kj}\cdot g'(z^l_j)$$
+    <p class="muted">Đây chính là chain rule một-tầng: \(\dfrac{\partial z^{l+1}_k}{\partial z^l_j}=\dfrac{\partial z^{l+1}_k}{\partial a^l_j}\cdot\dfrac{\partial a^l_j}{\partial z^l_j}=W^{l+1}_{kj}\cdot g'(z^l_j)\).</p>
+  </div>
+
+  <div class="step">
+    <span class="tag">Bước 3 — Ghép lại & rút thừa số chung</span>
+    <p>Thế kết quả Bước 2 vào Bước 1:</p>
+    $$\delta^l_j = \sum_k \delta^{l+1}_k \, W^{l+1}_{kj}\, g'(z^l_j)$$
+    <p>Thừa số \(g'(z^l_j)\) <b>không phụ thuộc \(k\)</b> nên rút ra ngoài tổng:</p>
+    $$\delta^l_j = \underbrace{\Big(\sum_k W^{l+1}_{kj}\, \delta^{l+1}_k\Big)}_{\text{lỗi kéo ngược qua }W}\; \cdot\; \underbrace{g'(z^l_j)}_{\text{độ nhạy kích hoạt}}$$
+  </div>
+
+  <div class="step">
+    <span class="tag">Bước 4 — Nhận ra phép nhân ma trận chuyển vị</span>
+    <p>Để ý tổng \(\sum_k W^{l+1}_{kj}\,\delta^{l+1}_k\): chỉ số chạy là \(k\) (hàng của \(W^{l+1}\)), chỉ số tự do là \(j\) (cột).
+    Đó <b>đúng định nghĩa</b> phần tử thứ \(j\) của \((W^{l+1})^\top \delta^{l+1}\):</p>
+    $$\Big[(W^{l+1})^\top \delta^{l+1}\Big]_j = \sum_k (W^{l+1})^\top_{jk}\,\delta^{l+1}_k = \sum_k W^{l+1}_{kj}\,\delta^{l+1}_k$$
+    <p class="muted">Chuyển vị \({}^\top\) xuất hiện <b>tự nhiên</b> ở đây: forward dùng \(W\) (đi tới), backward dùng \(W^\top\) (đi lui). Không phải quy ước tùy tiện.</p>
+  </div>
+
+  <div class="card">
+    <p>Viết lại toàn bộ theo dạng vector (mọi \(j\) cùng lúc), với \(\odot\) là nhân từng phần tử:</p>
+    <div class="formula-hero" style="margin-top:8px;">
+      $$\delta^l = \big((W^{l+1})^\top \delta^{l+1}\big) \odot g'^{\,l}(z^l) \qquad\blacksquare$$
+    </div>
+    <p class="muted" style="text-align:center;">Đúng bằng công thức trên slide. Hết chứng minh.</p>
+  </div>
+
+  <!-- ===================== 4. Ý NGHĨA 3 THÀNH PHẦN ===================== -->
+  <h2>4. Ý nghĩa ba thành phần</h2>
+  <div class="three">
+    <div class="box c1">
+      <b class="accent">\((W^{l+1})^\top \delta^{l+1}\)</b>
+      <p>Sai số từ lớp sau được <b>truyền ngược</b> về lớp hiện tại qua ma trận trọng số (chuyển vị) của lớp sau.</p>
+    </div>
+    <div class="box c2">
+      <b class="green">\(g'^{\,l}(z^l)\)</b>
+      <p>Độ nhạy của hàm kích hoạt tại lớp \(l\). Đạo hàm nhỏ ⟶ sai số truyền về cũng nhỏ (ví dụ ReLU tắt ⟶ chặn gradient).</p>
+    </div>
+    <div class="box c3">
+      <b>\(\odot\) (nhân từng phần tử)</b>
+      <p>Mỗi neuron trong lớp \(l\) nhận một mức sai số riêng của chính nó — không trộn lẫn giữa các neuron.</p>
+    </div>
+  </div>
+
+  <!-- ===================== 5. NỐI VỀ CODE ===================== -->
+  <h2>5. Nối về code bài 02 <span class="pill">day1/02_mlp_backprop.py</span></h2>
+  <p>Trong code, quy ước ma trận là “theo hàng” (\(z = a\,W\) thay vì \(W\,a\)), nên chuyển vị <b>đổi vế</b>:
+  công thức slide \((W^{l+1})^\top\delta^{l+1}\) trở thành <code>dZ2 @ W2.T</code>. Hai dòng sau chính là công thức ta vừa chứng minh, áp cho lớp ẩn:</p>
+  <pre><code># delta^{l+1} của lớp sau (ở đây là lớp ra) -> dZ2
+dA1 = dZ2 @ params["W2"].T      # (W^{l+1})^T · delta^{l+1}  — kéo lỗi ngược qua W
+dZ1 = dA1 * relu_grad(Z1)       # ⊙ g'(z^l)                  — nhân độ nhạy ReLU
+#     └──────────────┬─────────────┘
+#            chính là  delta^l  của lớp ẩn</code></pre>
+  <p class="muted"><code>relu_grad(Z1)</code> = \(g'^{\,l}(z^l)\) cho ReLU: bằng 1 nơi \(z>0\), bằng 0 nơi \(z\le 0\) — neuron “tắt” thì chặn gradient, đúng như ô xanh ở mục 4.</p>
+
+  <!-- ===================== 6. KIỂM CHỨNG SỐ ===================== -->
+  <h2>6. Kiểm chứng bằng số (chạy ngay trong trình duyệt)</h2>
+  <p>Lý thuyết là một chuyện — giờ kiểm bằng con số thật. Ta dựng một mạng tí hon, tính \(\delta^l\) <b>theo công thức</b>,
+  rồi tính \(\delta^l = \partial L/\partial z^l\) một cách <b>độc lập bằng sai phân hữu hạn</b> (vặn từng \(z^l_j\) một lượng \(\varepsilon\) cực nhỏ
+  và đo loss đổi bao nhiêu). Nếu công thức đúng, hai kết quả phải trùng khít.</p>
+
+  <div class="check" id="check">
+    <p class="muted">Đang tính…</p>
+  </div>
+
+  <div class="note">
+    Thiết lập: lớp \(l\) có 2 neuron, lớp \(l{+}1\) có 3 neuron, \(g=\) sigmoid (nên \(g'(z)=\sigma(z)(1-\sigma(z))\)),
+    loss \(L = v\cdot a^{l+1}\) cho một vector \(v\) cố định. Sai phân hữu hạn dùng \(\varepsilon=10^{-6}\).
+  </div>
+
+</div>
+
+<script>
+// ---- Mạng tí hon để kiểm chứng công thức delta^l ----
+const sigmoid = z => 1 / (1 + Math.exp(-z));
+const dsigmoid = z => { const s = sigmoid(z); return s * (1 - s); };
+
+// Lớp l: 2 neuron. Lớp l+1: 3 neuron.
+const zL   = [0.5, -0.3];                       // z^l  (pre-activation lớp l)
+const Wn   = [                                  // W^{l+1}: (3 x 2)
+  [ 0.2, -0.4],
+  [ 0.7,  0.1],
+  [-0.5,  0.3],
+];
+const bn   = [0.1, -0.2, 0.05];                 // b^{l+1}
+const v    = [0.6, -0.9, 0.4];                  // loss L = v · a^{l+1}
+
+// Forward từ z^l -> loss, trả về { L, znext } (cho phép thay z^l để lấy sai phân)
+function forwardFromZL(zl) {
+  const al = zl.map(sigmoid);                          // a^l = g(z^l)
+  const znext = bn.map((b, k) =>                       // z^{l+1} = W^{l+1} a^l + b
+    b + Wn[k][0] * al[0] + Wn[k][1] * al[1]);
+  const anext = znext.map(sigmoid);                    // a^{l+1}
+  const L = anext.reduce((s, a, k) => s + v[k] * a, 0); // L = v · a^{l+1}
+  return { L, znext };
+}
+
+// delta^{l+1} = dL/dz^{l+1}. Vì L = v·g(z^{l+1}): delta^{l+1}_k = v_k · g'(z^{l+1}_k)
+const { znext } = forwardFromZL(zL);
+const deltaNext = znext.map((z, k) => v[k] * dsigmoid(z));
+
+// (A) delta^l THEO CÔNG THỨC: (W^{l+1})^T · delta^{l+1}  ⊙  g'(z^l)
+const WT_delta = [0, 1].map(j =>                        // [(W^{l+1})^T delta^{l+1}]_j = Σ_k W_kj δ_k
+  deltaNext.reduce((s, dk, k) => s + Wn[k][j] * dk, 0));
+const deltaFormula = WT_delta.map((val, j) => val * dsigmoid(zL[j]));
+
+// (B) delta^l BẰNG SAI PHÂN HỮU HẠN: dL/dz^l_j ≈ (L(z+ε e_j) − L(z−ε e_j)) / 2ε
+const eps = 1e-6;
+const deltaNumeric = [0, 1].map(j => {
+  const zp = zL.slice(); zp[j] += eps;
+  const zm = zL.slice(); zm[j] -= eps;
+  return (forwardFromZL(zp).L - forwardFromZL(zm).L) / (2 * eps);
+});
+
+// ---- Hiển thị ----
+const fmt = x => x.toFixed(8);
+const maxDiff = Math.max(...deltaFormula.map((v, j) => Math.abs(v - deltaNumeric[j])));
+const ok = maxDiff < 1e-6;
+
+const rows = [0, 1].map(j => `
+  <tr>
+    <td>j = ${j}</td>
+    <td class="num">${fmt(deltaFormula[j])}</td>
+    <td class="num">${fmt(deltaNumeric[j])}</td>
+    <td class="num">${(Math.abs(deltaFormula[j] - deltaNumeric[j])).toExponential(2)}</td>
+  </tr>`).join('');
+
+document.getElementById('check').innerHTML = `
+  <table>
+    <thead>
+      <tr>
+        <th>Thành phần</th>
+        <th>(A) Theo công thức<br>(W<sup>l+1</sup>)<sup>T</sup>δ<sup>l+1</sup> ⊙ g'(z<sup>l</sup>)</th>
+        <th>(B) Sai phân hữu hạn<br>∂L/∂z<sup>l</sup> (độc lập)</th>
+        <th>|A − B|</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <p class="verdict ${ok ? 'ok' : ''}">
+    ${ok ? '✓ Hai cách tính trùng khít (sai khác &lt; 1e-6) — công thức được xác nhận bằng số.'
+         : '✗ Lệch quá lớn — kiểm tra lại.'}
+  </p>`;
+</script>
+</body>
+</html>

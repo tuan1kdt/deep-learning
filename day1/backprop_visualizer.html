@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minh hoạ Backpropagation — Bài 02 (MLP / XOR)</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2230;
+    --panel2: #222d3d;
+    --ink: #e6edf3;
+    --muted: #8b98a9;
+    --pos: #4da3ff;   /* xanh: tín hiệu forward / giá trị dương */
+    --neg: #ff6b6b;   /* đỏ: gradient / lỗi */
+    --relu: #ffd166;  /* vàng: ReLU */
+    --line: #33415a;
+    --ok: #3ddc97;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+  }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0 0 4px; font-size: 20px; }
+  header p { margin: 0; color: var(--muted); font-size: 13px; }
+  .wrap { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; padding: 16px 24px; }
+  @media (max-width: 980px) { .wrap { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h2 { margin: 0 0 10px; font-size: 14px; letter-spacing: .3px; color: var(--muted); text-transform: uppercase; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 0 24px 8px; }
+  button {
+    background: var(--panel2); color: var(--ink); border: 1px solid var(--line);
+    padding: 9px 16px; border-radius: 8px; font-size: 14px; cursor: pointer; transition: .15s;
+  }
+  button:hover { border-color: var(--pos); }
+  button.primary { background: var(--pos); color: #06243f; border-color: var(--pos); font-weight: 600; }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); padding: 0 24px 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  svg { width: 100%; height: auto; display: block; }
+  .step-box { background: var(--panel2); border-radius: 8px; padding: 12px; min-height: 120px; font-size: 14px; }
+  .step-box .tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:20px; margin-bottom:8px; font-weight:600; }
+  .tag.fwd { background: rgba(77,163,255,.18); color: var(--pos); }
+  .tag.bwd { background: rgba(255,107,107,.18); color: var(--neg); }
+  .tag.idle { background: rgba(139,152,169,.18); color: var(--muted); }
+  code { background: #0c1118; padding: 2px 6px; border-radius: 5px; font-size: 13px; color: var(--relu); }
+  .formula { font-family: "SF Mono", Menlo, monospace; font-size: 13px; background:#0c1118; padding:10px; border-radius:8px; margin-top:8px; color:#cdd9e5; overflow-x:auto; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; font-size: 13px; }
+  .stat { background: var(--panel2); padding: 8px 10px; border-radius: 8px; }
+  .stat b { color: var(--ok); font-variant-numeric: tabular-nums; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width: 220px; }
+  canvas { background:#0c1118; border-radius:8px; width:100%; height:auto; display:block; }
+  label.inline { font-size:13px; color:var(--muted); display:flex; align-items:center; gap:8px; }
+  input[type=range]{ accent-color: var(--pos); }
+  .note { font-size:12px; color:var(--muted); margin-top:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Minh hoạ Backpropagation — MLP 2 → 4 → 1 (bài toán XOR)</h1>
+  <p>Bấm từng bước để xem tín hiệu chảy <b style="color:var(--pos)">xuôi (forward)</b> rồi lỗi chảy <b style="color:var(--neg)">ngược (backward)</b>. Đây chính là thuật toán trong <code>day1/02_mlp_backprop.py</code>, thu nhỏ còn 4 neuron ẩn cho dễ nhìn.</p>
+</header>
+
+<div class="controls">
+  <button id="btnStep" class="primary">▶ Bước tiếp theo</button>
+  <button id="btnAuto">⏩ Tự chạy 1 vòng</button>
+  <button id="btnReset">↺ Đặt lại</button>
+  <button id="btnTrain">🏋️ Huấn luyện 2000 epoch</button>
+  <label class="inline">Điểm dữ liệu:
+    <select id="sample">
+      <option value="0">(0.9, 0.9) → kỳ vọng 1</option>
+      <option value="1">(-0.9, 0.9) → kỳ vọng 0</option>
+      <option value="2">(-0.8, -0.8) → kỳ vọng 1</option>
+      <option value="3">(0.8, -0.8) → kỳ vọng 0</option>
+    </select>
+  </label>
+</div>
+
+<div class="legend">
+  <span><i class="dot" style="background:var(--pos)"></i> Forward (giá trị Z, A)</span>
+  <span><i class="dot" style="background:var(--neg)"></i> Backward (gradient dZ, dW)</span>
+  <span><i class="dot" style="background:var(--relu)"></i> ReLU (cổng bật/tắt)</span>
+  <span>Độ đậm cạnh = độ lớn trọng số · Đỏ/đứt = âm</span>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h2>Sơ đồ mạng</h2>
+    <svg id="net" viewBox="0 0 760 420" preserveAspectRatio="xMidYMid meet"></svg>
+  </div>
+
+  <div class="card">
+    <h2>Đang diễn ra gì?</h2>
+    <div class="step-box" id="stepBox">
+      <span class="tag idle">SẴN SÀNG</span>
+      <div id="stepText">Bấm <b>“Bước tiếp theo”</b> để bắt đầu. Ta sẽ đi: đoán → chấm loss → la bàn (gradient) ngược về từng trọng số.</div>
+      <div class="formula" id="stepFormula" style="display:none"></div>
+    </div>
+    <div class="stats">
+      <div class="stat">Dự đoán ŷ (A2): <b id="sPred">—</b></div>
+      <div class="stat">Kỳ vọng y: <b id="sTrue">—</b></div>
+      <div class="stat">Loss (BCE): <b id="sLoss">—</b></div>
+      <div class="stat">Epoch đã train: <b id="sEpoch">0</b></div>
+    </div>
+
+    <h2 style="margin-top:16px">Ranh giới quyết định</h2>
+    <div class="row">
+      <div>
+        <canvas id="boundary" width="280" height="280"></canvas>
+        <div class="note">Vùng xanh = đoán lớp 1, đỏ = lớp 0. Lúc đầu lộn xộn; sau khi train sẽ thành 2 múi chéo của XOR.</div>
+      </div>
+      <div>
+        <canvas id="loss" width="280" height="200"></canvas>
+        <div class="note">Đường loss giảm dần qua từng epoch — bằng chứng “mạng đang học”.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+//  Mạng MLP 2 -> 4 -> 1 cài thuần JS (giống hệt logic file Python)
+// =====================================================================
+const NH = 4;                 // số neuron ẩn (nhỏ cho dễ nhìn)
+let W1, b1, W2, b2;           // tham số
+let rngState = 12345;
+function rng(){ // PRNG đơn giản, có thể lặp lại
+  rngState = (1103515245 * rngState + 12345) & 0x7fffffff;
+  return rngState / 0x7fffffff;
+}
+function randn(){ // Box-Muller
+  let u = 1 - rng(), v = rng();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function initParams(){
+  rngState = 12345;
+  W1 = Array.from({length:2}, () => Array.from({length:NH}, () => randn()*Math.sqrt(2/2)));
+  b1 = Array.from({length:NH}, () => 0);
+  W2 = Array.from({length:NH}, () => randn()*Math.sqrt(2/NH));
+  b2 = 0;
+}
+const relu  = z => Math.max(0, z);
+const drelu = z => z > 0 ? 1 : 0;
+const sigmoid = z => 1/(1+Math.exp(-Math.max(-500,Math.min(500,z))));
+
+// 4 điểm XOR đại diện (4 góc)
+const SAMPLES = [
+  {x:[ 0.9, 0.9], y:1},
+  {x:[-0.9, 0.9], y:0},
+  {x:[-0.8,-0.8], y:1},
+  {x:[ 0.8,-0.8], y:0},
+];
+
+// Forward 1 điểm, trả về toàn bộ cache trung gian
+function forwardOne(x){
+  const Z1 = [], A1 = [];
+  for(let j=0;j<NH;j++){
+    let z = b1[j];
+    for(let i=0;i<2;i++) z += x[i]*W1[i][j];
+    Z1[j]=z; A1[j]=relu(z);
+  }
+  let Z2 = b2;
+  for(let j=0;j<NH;j++) Z2 += A1[j]*W2[j];
+  const A2 = sigmoid(Z2);
+  return {x, Z1, A1, Z2, A2};
+}
+function bce(y, p){ const e=1e-9; return -(y*Math.log(p+e)+(1-y)*Math.log(1-p+e)); }
+
+// Backward 1 điểm (n=1) -> các gradient
+function backwardOne(c, y){
+  const dZ2 = c.A2 - y;                 // mẹo sigmoid+BCE: dL/dZ2 = A2 - y
+  const dW2 = c.A1.map(a => a*dZ2);
+  const db2 = dZ2;
+  const dA1 = W2.map(w => w*dZ2);        // truyền lỗi ngược qua W2
+  const dZ1 = dA1.map((d,j)=> d*drelu(c.Z1[j]));
+  const dW1 = [[],[]];
+  for(let i=0;i<2;i++) for(let j=0;j<NH;j++) dW1[i][j] = c.x[i]*dZ1[j];
+  const db1 = dZ1.slice();
+  return {dZ2, dW2, db2, dA1, dZ1, dW1, db1};
+}
+
+// =====================================================================
+//  Huấn luyện đầy đủ trên tập XOR có nhiễu (để vẽ ranh giới + loss)
+// =====================================================================
+let trainData = [];
+function makeData(n=200){
+  const d=[];
+  for(let k=0;k<n;k++){
+    const x1 = rng()*2-1, x2 = rng()*2-1;
+    const y = (x1*x2 > 0) ? 1 : 0;
+    d.push({x:[x1 + randn()*0.1, x2 + randn()*0.1], y});
+  }
+  return d;
+}
+let lossHistory = [];
+let epochCount = 0;
+function trainEpochs(epochs, lr=0.5){
+  if(trainData.length===0) trainData = makeData(200);
+  for(let e=0;e<epochs;e++){
+    // tích luỹ gradient trên cả batch
+    const gW1=[[0,0,0,0],[0,0,0,0]], gb1=[0,0,0,0], gW2=[0,0,0,0]; let gb2=0;
+    let L=0;
+    for(const s of trainData){
+      const c = forwardOne(s.x);
+      L += bce(s.y, c.A2);
+      const g = backwardOne(c, s.y);
+      for(let i=0;i<2;i++) for(let j=0;j<NH;j++) gW1[i][j]+=g.dW1[i][j];
+      for(let j=0;j<NH;j++){ gb1[j]+=g.db1[j]; gW2[j]+=g.dW2[j]; }
+      gb2 += g.db2;
+    }
+    const n = trainData.length;
+    for(let i=0;i<2;i++) for(let j=0;j<NH;j++) W1[i][j]-=lr*gW1[i][j]/n;
+    for(let j=0;j<NH;j++){ b1[j]-=lr*gb1[j]/n; W2[j]-=lr*gW2[j]/n; }
+    b2 -= lr*gb2/n;
+    lossHistory.push(L/n);
+    epochCount++;
+  }
+}
+
+// =====================================================================
+//  Trình diễn từng bước cho 1 điểm dữ liệu
+// =====================================================================
+let curSample = 0, cache = null, grads = null, stepIdx = 0;
+const STEPS = [
+  { tag:'fwd', title:'① FORWARD — Lớp ẩn: Z1 = X·W1 + b1',
+    text:'Mỗi neuron ẩn là MỘT đường thẳng (giống bài 01). Tín hiệu từ 2 đầu vào nhân trọng số rồi cộng lại thành Z1.',
+    formula:'Z1[j] = x1·W1[0][j] + x2·W1[1][j] + b1[j]', hl:'Z1' },
+  { tag:'fwd', title:'② FORWARD — ReLU: A1 = relu(Z1)',
+    text:'Cổng phi tuyến: neuron nào Z1>0 thì "bật" (cho qua), Z1≤0 thì "tắt" (=0). Đây là thứ cho phép bẻ cong ranh giới.',
+    formula:'A1[j] = max(0, Z1[j])', hl:'A1' },
+  { tag:'fwd', title:'③ FORWARD — Lớp ra: Z2 = A1·W2 + b2',
+    text:'Trộn 4 neuron ẩn lại thành 1 con số Z2 (lại là tổ hợp tuyến tính như bài 01).',
+    formula:'Z2 = Σ A1[j]·W2[j] + b2', hl:'Z2' },
+  { tag:'fwd', title:'④ FORWARD — Sigmoid: A2 = σ(Z2)',
+    text:'Ép Z2 về khoảng (0,1) để hiểu như XÁC SUẤT thuộc lớp 1. Đây là dự đoán cuối ŷ.',
+    formula:'A2 = 1 / (1 + e^(−Z2))', hl:'A2' },
+  { tag:'idle', title:'⑤ CHẤM ĐIỂM — Loss BCE',
+    text:'So dự đoán A2 với kỳ vọng y. Loss càng nhỏ càng tốt. Giờ ta đi NGƯỢC để biết phải vặn trọng số hướng nào.',
+    formula:'L = −[ y·log(A2) + (1−y)·log(1−A2) ]', hl:null },
+  { tag:'bwd', title:'⑥ BACKWARD — dZ2 = A2 − y',
+    text:'Món quà của sigmoid+BCE: đạo hàm rút gọn còn đúng (A2 − y) = "lỗi". Để ý: y hệt error ở bài 01!',
+    formula:'dL/dZ2 = A2 − y', hl:'dZ2' },
+  { tag:'bwd', title:'⑦ BACKWARD — dW2 = A1·dZ2',
+    text:'Gradient trọng số lớp ra = đầu vào của lớp đó (A1) nhân lỗi. Đây là hướng cần vặn W2.',
+    formula:'dW2[j] = A1[j] · dZ2', hl:'dW2' },
+  { tag:'bwd', title:'⑧ BACKWARD — dA1 = W2·dZ2 (truyền lỗi ngược)',
+    text:'Đẩy lỗi NGƯỢC qua W2 về lớp ẩn — "back-propagation" chính là bước này. Lớp ẩn nay biết mình sai bao nhiêu.',
+    formula:'dA1[j] = W2[j] · dZ2', hl:'dA1' },
+  { tag:'bwd', title:'⑨ BACKWARD — dZ1 = dA1 · relu\'(Z1)',
+    text:'Nhân tiếp tỉ lệ qua cổng ReLU: neuron nào lúc forward bị "tắt" thì không nhận gradient.',
+    formula:"dZ1[j] = dA1[j] · (1 nếu Z1[j]>0, ngược lại 0)", hl:'dZ1' },
+  { tag:'bwd', title:'⑩ BACKWARD — dW1 = X·dZ1',
+    text:'Tới được lớp đầu: gradient W1 = đầu vào X nhân lỗi dZ1. Cùng công thức "đầu vào · lỗi" như mọi lớp.',
+    formula:'dW1[i][j] = x[i] · dZ1[j]', hl:'dW1' },
+  { tag:'idle', title:'⑪ CẬP NHẬT — param −= lr · grad',
+    text:'Dùng la bàn vừa tính, bước ngược hướng gradient cho cả 4 tensor. Lặp lại hàng nghìn lần = huấn luyện.',
+    formula:'W1,b1,W2,b2  ←  trừ đi (lr × gradient tương ứng)', hl:'all' },
+];
+
+// ---------- Vẽ sơ đồ mạng bằng SVG ----------
+const svg = document.getElementById('net');
+const NS = 'http://www.w3.org/2000/svg';
+const layout = {
+  in:  [{x:90,y:150,l:'x1'},{x:90,y:270,l:'x2'}],
+  hid: Array.from({length:NH},(_,j)=>({x:360,y:70+j*90,l:'h'+(j+1)})),
+  out: [{x:640,y:210,l:'ŷ'}],
+};
+function el(tag, attrs){ const e=document.createElementNS(NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+function colorFor(v){ return v>=0 ? 'var(--pos)' : 'var(--neg)'; }
+
+let edgeEls = {};
+function buildNet(){
+  svg.innerHTML='';
+  edgeEls = {w1:[], w2:[]};
+  // cạnh input->hidden
+  for(let i=0;i<2;i++) for(let j=0;j<NH;j++){
+    const a=layout.in[i], b=layout.hid[j];
+    const line = el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'var(--line)','stroke-width':1.5});
+    svg.appendChild(line); edgeEls.w1.push({line,i,j});
+  }
+  // cạnh hidden->output
+  for(let j=0;j<NH;j++){
+    const a=layout.hid[j], b=layout.out[0];
+    const line = el('line',{x1:a.x,y1:a.y,x2:b.x,y2:b.y,stroke:'var(--line)','stroke-width':1.5});
+    svg.appendChild(line); edgeEls.w2.push({line,j});
+  }
+  // node
+  const mk = (p,fill)=>{
+    const g=el('g',{});
+    g.appendChild(el('circle',{cx:p.x,cy:p.y,r:26,fill:'#0c1118',stroke:fill,'stroke-width':2}));
+    const t=el('text',{x:p.x,y:p.y-32,fill:'var(--muted)','text-anchor':'middle','font-size':12}); t.textContent=p.l; g.appendChild(t);
+    const val=el('text',{x:p.x,y:p.y+5,fill:'var(--ink)','text-anchor':'middle','font-size':12,'font-family':'monospace'}); val.textContent='—'; g.appendChild(val);
+    p._val=val; p._circle=g.firstChild;
+    svg.appendChild(g);
+  };
+  layout.in.forEach(p=>mk(p,'#5a6b86'));
+  layout.hid.forEach(p=>mk(p,'var(--relu)'));
+  layout.out.forEach(p=>mk(p,'var(--pos)'));
+  // nhãn lớp
+  const lab=(x,txt)=>{const t=el('text',{x,y:30,fill:'var(--muted)','text-anchor':'middle','font-size':12,'font-weight':600});t.textContent=txt;svg.appendChild(t);};
+  lab(90,'ĐẦU VÀO'); lab(360,'LỚP ẨN (ReLU)'); lab(640,'ĐẦU RA (σ)');
+}
+
+function styleEdges(){
+  edgeEls.w1.forEach(({line,i,j})=>{
+    const w=W1[i][j]; line.setAttribute('stroke', colorFor(w));
+    line.setAttribute('stroke-width', Math.min(6, 0.7+Math.abs(w)*2.2));
+    line.setAttribute('stroke-dasharray', w<0?'4 3':'none');
+    line.setAttribute('opacity',0.85);
+  });
+  edgeEls.w2.forEach(({line,j})=>{
+    const w=W2[j]; line.setAttribute('stroke', colorFor(w));
+    line.setAttribute('stroke-width', Math.min(6, 0.7+Math.abs(w)*2.2));
+    line.setAttribute('stroke-dasharray', w<0?'4 3':'none');
+    line.setAttribute('opacity',0.85);
+  });
+}
+
+function setNode(p, v, color){ p._val.textContent = (typeof v==='number'? v.toFixed(2): v); p._circle.setAttribute('stroke', color); }
+function flash(circle, color){ circle.setAttribute('stroke', color); circle.setAttribute('stroke-width', 4); setTimeout(()=>circle.setAttribute('stroke-width',2), 600); }
+
+function renderForwardState(){
+  setNode(layout.in[0], cache.x[0], '#5a6b86');
+  setNode(layout.in[1], cache.x[1], '#5a6b86');
+}
+
+// cập nhật hiển thị theo step hiện tại
+function applyStepVisual(hl){
+  if(hl==='Z1' || hl==='A1'){
+    layout.hid.forEach((p,j)=>{
+      const v = hl==='Z1'? cache.Z1[j] : cache.A1[j];
+      const c = hl==='A1'? (cache.A1[j]>0?'var(--relu)':'#3a3f29') : colorFor(cache.Z1[j]);
+      setNode(p, v, c); flash(p._circle, c);
+    });
+  } else if(hl==='Z2' || hl==='A2'){
+    const v = hl==='Z2'? cache.Z2 : cache.A2;
+    setNode(layout.out[0], v, 'var(--pos)'); flash(layout.out[0]._circle,'var(--pos)');
+  } else if(hl==='dZ2'){
+    setNode(layout.out[0], grads.dZ2, 'var(--neg)'); flash(layout.out[0]._circle,'var(--neg)');
+  } else if(hl==='dW2'){
+    edgeEls.w2.forEach(({line,j})=>{ line.setAttribute('stroke','var(--neg)'); line.setAttribute('stroke-width', Math.min(7,1+Math.abs(grads.dW2[j])*4)); });
+  } else if(hl==='dA1' || hl==='dZ1'){
+    layout.hid.forEach((p,j)=>{ const v= hl==='dA1'?grads.dA1[j]:grads.dZ1[j]; setNode(p,v,'var(--neg)'); flash(p._circle,'var(--neg)'); });
+  } else if(hl==='dW1'){
+    edgeEls.w1.forEach(({line,i,j})=>{ line.setAttribute('stroke','var(--neg)'); line.setAttribute('stroke-width', Math.min(7,1+Math.abs(grads.dW1[i][j])*4)); });
+  } else if(hl==='all'){
+    styleEdges();
+  }
+}
+
+// ---------- điều khiển bước ----------
+function gotoStep(i){
+  const s = STEPS[i];
+  document.querySelector('#stepBox .tag').className = 'tag '+s.tag;
+  document.querySelector('#stepBox .tag').textContent = s.tag==='fwd'?'FORWARD ▶': s.tag==='bwd'?'◀ BACKWARD':'•';
+  document.getElementById('stepText').innerHTML = '<b>'+s.title+'</b><br>'+s.text;
+  const f = document.getElementById('stepFormula');
+  f.style.display='block'; f.textContent = s.formula;
+  applyStepVisual(s.hl);
+
+  document.getElementById('sPred').textContent = cache.A2.toFixed(3);
+  document.getElementById('sTrue').textContent = SAMPLES[curSample].y;
+  document.getElementById('sLoss').textContent = bce(SAMPLES[curSample].y, cache.A2).toFixed(3);
+}
+
+function startSample(){
+  curSample = +document.getElementById('sample').value;
+  cache = forwardOne(SAMPLES[curSample].x);
+  grads = backwardOne(cache, SAMPLES[curSample].y);
+  stepIdx = 0;
+  styleEdges(); renderForwardState();
+}
+
+document.getElementById('btnStep').onclick = ()=>{
+  if(stepIdx===0) startSample();
+  gotoStep(stepIdx);
+  stepIdx = (stepIdx+1) % STEPS.length;
+  if(stepIdx===0){ styleEdges(); } // hết vòng -> vẽ lại cạnh theo trọng số
+};
+document.getElementById('btnAuto').onclick = async ()=>{
+  startSample();
+  for(let k=0;k<STEPS.length;k++){ gotoStep(k); await new Promise(r=>setTimeout(r,900)); }
+  stepIdx=0; styleEdges();
+};
+document.getElementById('btnReset').onclick = ()=>{
+  initParams(); lossHistory=[]; epochCount=0; trainData=[];
+  buildNet(); styleEdges(); stepIdx=0;
+  document.getElementById('sEpoch').textContent='0';
+  document.getElementById('stepText').innerHTML='Đã đặt lại trọng số. Bấm “Bước tiếp theo”.';
+  document.getElementById('stepFormula').style.display='none';
+  drawBoundary(); drawLoss();
+  ['sPred','sTrue','sLoss'].forEach(id=>document.getElementById(id).textContent='—');
+};
+document.getElementById('sample').onchange = ()=>{ startSample(); stepIdx=0; document.getElementById('btnStep').click(); };
+document.getElementById('btnTrain').onclick = async ()=>{
+  const btn=document.getElementById('btnTrain'); btn.disabled=true; btn.textContent='⏳ Đang train...';
+  for(let i=0;i<20;i++){ trainEpochs(100); document.getElementById('sEpoch').textContent=epochCount;
+    styleEdges(); drawBoundary(); drawLoss(); await new Promise(r=>setTimeout(r,40)); }
+  btn.disabled=false; btn.textContent='🏋️ Huấn luyện 2000 epoch';
+  document.getElementById('stepText').innerHTML='<b>Huấn luyện xong!</b> Nhìn ranh giới bên dưới: đã thành 2 múi chéo của XOR. Bấm “Bước tiếp theo” để xem lại forward/backward với trọng số đã học.';
+};
+
+// ---------- canvas: ranh giới + loss ----------
+const bc = document.getElementById('boundary'), bctx = bc.getContext('2d');
+function drawBoundary(){
+  const W=bc.width, H=bc.height, step=4;
+  for(let py=0;py<H;py+=step) for(let px=0;px<W;px+=step){
+    const x1 = (px/W)*2-1, x2 = 1-(py/H)*2;
+    const p = forwardOne([x1,x2]).A2;
+    // p->1 xanh, p->0 đỏ
+    const r = Math.round(255*(1-p)+30*p), g=Math.round(80), b=Math.round(255*p+30*(1-p));
+    bctx.fillStyle=`rgb(${r},${g},${b})`; bctx.fillRect(px,py,step,step);
+  }
+  // 4 điểm mẫu
+  SAMPLES.forEach(s=>{
+    const px=((s.x[0]+1)/2)*W, py=((1-s.x[1])/2)*H;
+    bctx.fillStyle = s.y? '#fff':'#000'; bctx.beginPath(); bctx.arc(px,py,6,0,7); bctx.fill();
+    bctx.strokeStyle='#fff'; bctx.lineWidth=1.5; bctx.stroke();
+  });
+}
+const lc = document.getElementById('loss'), lctx=lc.getContext('2d');
+function drawLoss(){
+  const W=lc.width,H=lc.height; lctx.clearRect(0,0,W,H);
+  lctx.fillStyle='#0c1118'; lctx.fillRect(0,0,W,H);
+  if(lossHistory.length<2) return;
+  const mx=Math.max(...lossHistory), mn=Math.min(...lossHistory);
+  lctx.strokeStyle='var(--pos)'; lctx.lineWidth=2; lctx.beginPath();
+  lossHistory.forEach((v,i)=>{
+    const x=(i/(lossHistory.length-1))*(W-20)+10;
+    const y=H-12-((v-mn)/(mx-mn+1e-9))*(H-24);
+    i?lctx.lineTo(x,y):lctx.moveTo(x,y);
+  });
+  lctx.stroke();
+  lctx.fillStyle='#8b98a9'; lctx.font='11px monospace';
+  lctx.fillText('loss='+lossHistory[lossHistory.length-1].toFixed(3), 12, 16);
+}
+
+// ---------- khởi động ----------
+initParams(); buildNet(); styleEdges(); drawBoundary(); drawLoss();
+</script>
+</body>
+</html>
