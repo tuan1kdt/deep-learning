@@ -2,7 +2,7 @@
 
 Tài liệu này giải nghĩa **từng ký hiệu** xuất hiện trong công thức backprop và file
 [backprop_proof.html](backprop_proof.html), nối với code trong
-[02_mlp_backprop.py](02_mlp_backprop.py). Đọc kèm khi gặp ký hiệu lạ.
+[02_mlp_backprop.py](../day1/02_mlp_backprop.py). Đọc kèm khi gặp ký hiệu lạ.
 
 Công thức trung tâm ta đang mổ xẻ:
 

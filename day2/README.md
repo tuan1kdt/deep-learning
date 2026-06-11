@@ -26,3 +26,10 @@ Sigma l = Sigma L / Sigma l
 
 
 Sigma L / Sigma w^l  = Sigma l ....
+
+
+
+
+Giữa kỳ: xây dựng visual question A cho y tế (ảnh X Quang gì đấy rồi hỏi đáp trên đấy)
+
+BTVN: tìm hiểu các phương pháp tối ưu trong huấn luyện mạng Nơ Ron. Adam, momenton...
