@@ -54,8 +54,8 @@ Câu hỏi    ─→ BERT-base (pretrained, freeze) ─→ v_txt (768-d) ──�
 ### 3.2 Text encoder (`models/text_encoder.py`)
 
 - `bert-base-uncased` từ transformers (câu hỏi VQA-RAD là tiếng Anh).
-- Xuất embedding `[CLS]` 768-d làm vector câu hỏi; đồng thời trả token sequence
-  cho cross-attention (dùng `[CLS]` làm query là đủ cho bản chính).
+- Xuất embedding `[CLS]` 768-d làm vector câu hỏi — dùng cho cả 3 fusion
+  (với `cross_attention`, `[CLS]` đóng vai trò query duy nhất).
 - Mặc định **freeze toàn bộ**. Tên model là config — đổi sang
   `emilyalsentzer/Bio_ClinicalBERT` là một thí nghiệm phụ tùy thời gian.
 
@@ -107,9 +107,12 @@ Cả 3 module cùng interface: nhận `(v_img, img_map, v_txt)` → trả vector
 
 - CLI: `python -m midterm.train --fusion concat|hadamard|cross_attention`
   → 3 lệnh = 3 thí nghiệm của báo cáo.
-- Optimizer AdamW, LR `1e-3` cho phần trainable, cosine decay, batch 64,
-  tối đa 30 epoch, early stopping theo val overall accuracy (patience 5).
+- Optimizer AdamW, LR `1e-3` cho phần trainable (fusion + projection + head),
+  cosine decay, batch 64, tối đa 30 epoch, early stopping theo val overall
+  accuracy (patience 5). Khi bật `unfreeze_last_block`: layer4 của ResNet dùng
+  LR riêng `1e-5` (param group thứ hai).
 - Device tự chọn: `cuda` → `mps` → `cpu`.
+- `run_name` mặc định = tên fusion (vd `concat`); ghi đè được bằng `--run-name`.
 - Mỗi run lưu vào `outputs/<run_name>/`: `config.json`, `history.json`
   (loss/acc theo epoch), biểu đồ `curves.png` (matplotlib backend Agg);
   checkpoint tốt nhất vào `checkpoints/<run_name>.pt`.
