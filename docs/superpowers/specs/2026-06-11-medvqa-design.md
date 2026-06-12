@@ -1,7 +1,8 @@
 # MedVQA — Thiết kế hệ thống Hỏi-đáp trên ảnh y khoa (VQA-RAD)
 
 **Ngày:** 2026-06-11
-**Trạng thái:** Đã duyệt qua brainstorming
+**Trạng thái:** Đã duyệt qua brainstorming. Cập nhật 2026-06-12 sau review: BN eval mode,
+mean-pooling text, val split có chủ đích, bỏ `<unk>`, ghi nhận confound ablation.
 **Phạm vi:** Đồ án giữa kỳ — thư mục `midterm/`
 
 ## 1. Mục tiêu & tiêu chí thành công
@@ -50,12 +51,20 @@ Câu hỏi    ─→ BERT-base (pretrained, freeze) ─→ v_txt (768-d) ──�
 - Cả hai chiếu qua `Linear` về `d_model = 768`.
 - Mặc định **freeze toàn bộ**; cờ config `unfreeze_last_block` mở block conv cuối
   (layer4) làm thí nghiệm phụ.
+- **BatchNorm luôn chạy ở eval mode** (running stats đóng băng), kể cả lúc train
+  và kể cả khi `unfreeze_last_block`. Lý do: chỉ đặt `requires_grad=False` là chưa
+  đủ — nếu gọi `model.train()` toàn cục, BN vẫn cập nhật running stats theo ảnh
+  y khoa, khiến encoder "frozen" âm thầm thay đổi hành vi và kết quả không tái lập.
 
 ### 3.2 Text encoder (`models/text_encoder.py`)
 
 - `bert-base-uncased` từ transformers (câu hỏi VQA-RAD là tiếng Anh).
-- Xuất embedding `[CLS]` 768-d làm vector câu hỏi — dùng cho cả 3 fusion
-  (với `cross_attention`, `[CLS]` đóng vai trò query duy nhất).
+- Vector câu hỏi 768-d lấy theo config `text_pool`:
+  - `mean` (**mặc định**) — mean-pooling hidden states lớp cuối, có attention mask.
+    `[CLS]` của BERT freeze được pretrain cho next-sentence prediction nên là biểu
+    diễn câu yếu; mean-pooling thường tốt hơn rõ rệt khi không fine-tune.
+  - `cls` — embedding `[CLS]`, giữ làm đối chứng (thí nghiệm phụ rẻ tiền).
+  Vector này dùng cho cả 3 fusion; với `cross_attention` nó là query duy nhất.
 - Mặc định **freeze toàn bộ**. Tên model là config — đổi sang
   `emilyalsentzer/Bio_ClinicalBERT` là một thí nghiệm phụ tùy thời gian.
 
@@ -68,6 +77,11 @@ Cả 3 module cùng interface: nhận `(v_img, img_map, v_txt)` → trả vector
 | `concat` | `Linear([v_img ; v_txt]) → ReLU` | Baseline đơn giản nhất |
 | `hadamard` | `v_img ⊙ v_txt` (sau khi chiếu cùng chiều) | Tương tác nhân giữa hai modality |
 | `cross_attention` | Multi-head attention: Q = v_txt, K/V = 49 vùng ảnh; cộng residual + LayerNorm | Câu hỏi "nhìn" vào vùng ảnh liên quan; attention weights trực quan hóa được |
+
+> **Lưu ý diễn giải ablation:** `cross_attention` nhận 49 vùng spatial mà
+> `concat`/`hadamard` không có, nên khác biệt kết quả gộp cả hai yếu tố "cơ chế
+> fusion" và "có thông tin spatial". Báo cáo phải thừa nhận confound này khi kết
+> luận; không bắt buộc thêm variant để gỡ (ngoài phạm vi).
 
 ### 3.4 Classifier head (trong `models/vqa_model.py`)
 
@@ -86,8 +100,13 @@ Cả 3 module cùng interface: nhận `(v_img, img_map, v_txt)` → trả vector
 ### 4.2 Answer vocab (`data/vocab.py`)
 
 - Build từ **train split duy nhất**. Chuẩn hóa đáp án: lowercase, strip khoảng
-  trắng và dấu câu thừa. Mỗi đáp án duy nhất sau chuẩn hóa = 1 class.
-- Lưu `midterm/data/answer_vocab.json` (mapping answer ↔ index).
+  trắng và dấu câu thừa, gộp khoảng trắng liên tiếp. Mỗi đáp án duy nhất sau
+  chuẩn hóa = 1 class — đúng **429 class, không có token `<unk>`** (mọi đáp án
+  train đều nằm trong vocab theo cách build, nên `<unk>` sẽ là class chết không
+  bao giờ làm target). Độ phủ vocab trên test: **334/451 = 74,1%** — trần
+  accuracy khả dĩ, nhất quán với kỳ vọng 50–65%.
+- Lưu `midterm/data/answer_vocab.json` (mapping answer ↔ index). File hiện có
+  do code cũ tạo chứa `<unk>` (433 entries) — script mới phải **build lại, ghi đè**.
 - Đáp án test ngoài vocab → dự đoán chắc chắn sai; script in **độ phủ vocab trên
   test** để báo cáo minh bạch.
 
@@ -98,8 +117,14 @@ Cả 3 module cùng interface: nhận `(v_img, img_map, v_txt)` → trả vector
   Augmentation nhẹ chỉ cho train và tắt được qua config: random resized crop
   (scale 0.9–1.0). **Không horizontal flip** — ảnh y khoa có tính trái/phải.
 - Câu hỏi: tokenize bằng BERT tokenizer, pad/truncate `max_len = 32`.
-- **Validation split**: tách 10% từ train với seed 42 (VQA-RAD không có val
-  chính thức). Test 451 mẫu chỉ dùng cho đánh giá cuối cùng.
+- **Validation split**: tách 10% từ train với seed 42, **theo QA pair** (VQA-RAD
+  không có val chính thức). Đây là lựa chọn có chủ đích, không phải sơ suất:
+  train có 1.793 QA pairs nhưng chỉ **313 ảnh duy nhất** (~5,7 câu hỏi/ảnh), và
+  **202/203 ảnh test cũng xuất hiện trong train** — split chính thức của VQA-RAD
+  vốn chia theo câu hỏi, không theo ảnh. Val theo QA pair vì vậy khớp đúng điều
+  kiện test (ảnh đã thấy, câu hỏi mới). Báo cáo phải nêu phân tích này — "có
+  data leakage không?" là câu hỏi vấn đáp dễ gặp.
+- Test 451 mẫu chỉ dùng cho đánh giá cuối cùng.
 
 ## 5. Training & evaluation
 
@@ -112,6 +137,8 @@ Cả 3 module cùng interface: nhận `(v_img, img_map, v_txt)` → trả vector
   accuracy (patience 5). Khi bật `unfreeze_last_block`: layer4 của ResNet dùng
   LR riêng `1e-5` (param group thứ hai).
 - Device tự chọn: `cuda` → `mps` → `cpu`.
+- **Seed toàn cục** (random/numpy/torch, cả CUDA) fix mặc định 42 ở đầu mỗi run —
+  3 thí nghiệm fusion chỉ khác nhau ở fusion, không khác ở khởi tạo ngẫu nhiên.
 - `run_name` mặc định = tên fusion (vd `concat`); ghi đè được bằng `--run-name`.
 - Mỗi run lưu vào `outputs/<run_name>/`: `config.json`, `history.json`
   (loss/acc theo epoch), biểu đồ `curves.png` (matplotlib backend Agg);
@@ -137,6 +164,7 @@ Cả 3 module cùng interface: nhận `(v_img, img_map, v_txt)` → trả vector
 ```
 midterm/
 ├── README.md            # cập nhật: kiến trúc, cách chạy, bảng kết quả
+├── requirements.txt     # cho Colab: torch/torchvision/transformers/datasets
 ├── config.py            # dataclass Config: mọi hyperparameter + fusion type
 ├── data/
 │   ├── download.py
@@ -149,14 +177,15 @@ midterm/
 │   └── vqa_model.py
 ├── train.py
 ├── evaluate.py
-└── demo.py
+├── demo.py
+└── colab_train.ipynb    # notebook mỏng cho Colab: clone → install → train ×3 → evaluate
 ```
 
 - Mỗi module một trách nhiệm: đổi fusion không đụng encoder, đổi encoder không
   đụng training loop. Tất cả lựa chọn đi qua `config.py`.
-- Colab: notebook mỏng ~5 cell (clone repo → pip install → download → train ×3
-  → evaluate), không viết lại logic. Notebook nằm ngoài phạm vi spec này —
-  tạo ở bước implementation khi codebase chạy được.
+- Colab: notebook mỏng ~6 cell (clone repo → pip install → download → train ×3
+  → evaluate ×3 → demo), không viết lại logic — mọi logic nằm trong modules,
+  notebook chỉ gọi CLI. Tạo ở cuối bước implementation khi codebase chạy được.
 - Artifacts (`data/vqa_rad/`, `answer_vocab.json`, `checkpoints/`, `outputs/`)
   đã nằm trong `.gitignore`.
 
