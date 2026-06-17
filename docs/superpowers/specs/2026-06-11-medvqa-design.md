@@ -183,9 +183,14 @@ midterm/
 
 - Mỗi module một trách nhiệm: đổi fusion không đụng encoder, đổi encoder không
   đụng training loop. Tất cả lựa chọn đi qua `config.py`.
-- Colab: notebook mỏng ~6 cell (clone repo → pip install → download → train ×3
-  → evaluate ×3 → demo), không viết lại logic — mọi logic nằm trong modules,
-  notebook chỉ gọi CLI. Tạo ở cuối bước implementation khi codebase chạy được.
+- Colab: `colab_train.ipynb` là notebook **all-in-one tự chứa toàn bộ logic**
+  (config + data + model + train + evaluate + demo inline) — không cần `git clone`,
+  không phụ thuộc các module `.py`. Quyết định này (2026-06-17, theo yêu cầu người
+  dùng) thay cho thiết kế "notebook mỏng gọi CLI" ban đầu: notebook mỏng dùng
+  `python -m midterm.X` phụ thuộc CWD là repo root, mà Colab reconnect làm mất
+  `%cd` → `ModuleNotFoundError`. Bản all-in-one chạy mọi thứ trong process nên chỉ
+  cần Run-all lại là xong. Đánh đổi: logic bị nhân đôi giữa notebook và `.py`
+  (các `.py` vẫn giữ cho CLI local); khi sửa model phải đồng bộ cả hai nơi.
 - Artifacts (`data/vqa_rad/`, `answer_vocab.json`, `checkpoints/`, `outputs/`)
   đã nằm trong `.gitignore`.
 
