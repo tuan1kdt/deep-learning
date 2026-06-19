@@ -15,7 +15,6 @@ function App() {
   const [phase, setPhase] = useState<Phase>("loading");
   const [checkpoints, setCheckpoints] = useState<string[]>([]);
   const [current, setCurrent] = useState("");
-  const [hasAttention, setHasAttention] = useState(false);
   const [imageB64, setImageB64] = useState("");
   const [preview, setPreview] = useState("");
   const [question, setQuestion] = useState("");
@@ -31,7 +30,6 @@ function App() {
         const h = await Health();
         if (cancelled) return;
         if (h.ready) {
-          setHasAttention(h.has_attention);
           const c = await Checkpoints();
           setCheckpoints(c.checkpoints);
           setCurrent(c.current);
@@ -81,7 +79,6 @@ function App() {
     try {
       const h = await LoadCheckpoint(name);
       setCurrent(h.checkpoint);
-      setHasAttention(h.has_attention);
     } catch (e) {
       setError(String(e));
     } finally {
