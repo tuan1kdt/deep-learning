@@ -19,7 +19,6 @@ def test_available_checkpoints_lists_existing_pt():
 
 
 def test_resolve_default_prefers_existing_preferred():
-    names = serve.available_checkpoints()
     assert serve.resolve_default_checkpoint("concat") == "concat"
 
 
@@ -48,6 +47,12 @@ def test_checkpoints_endpoint_structure():
     body = client.get("/checkpoints").get_json()
     assert "concat" in body["checkpoints"]
     assert "current" in body
+
+
+def test_load_missing_checkpoint_field_400():
+    client = serve.app.test_client()
+    resp = client.post("/load", json={})
+    assert resp.status_code == 400
 
 
 # ---- Integration: load checkpoint thật (chậm ~30s, cần >=1 file .pt) ----

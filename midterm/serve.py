@@ -61,20 +61,26 @@ def resolve_default_checkpoint(preferred: str | None) -> str | None:
 
 
 def load_checkpoint(name: str) -> None:
-    """Load checkpoint theo tên stem vào state toàn cục. Raise nếu file không có."""
+    """Load checkpoint theo tên stem vào state toàn cục. Raise nếu file không có.
+    Phần load nặng chạy ngoài lock; chỉ swap globals + state dưới lock (nhanh) để
+    /predict không bao giờ thấy model nửa-swap, và lần reload không khóa server lâu."""
     global _model, _cfg, _tokenizer, _idx_to_answer, _transform
     path = _checkpoint_dir() / f"{name}.pt"
     if not path.exists():
         raise FileNotFoundError(f"Không tìm thấy checkpoint: {path}")
+    # Load nặng vào biến cục bộ, ngoài lock (model cũ vẫn phục vụ trong lúc này)
+    model, cfg = load_model(str(path), _device)
+    vocab = load_vocab(cfg.vocab_path)
+    tokenizer = AutoTokenizer.from_pretrained(cfg.text_model_name)
+    transform = build_transforms(cfg, train=False)
+    idx_to_answer = {idx: ans for ans, idx in vocab.items()}
+    # Swap nhanh dưới lock
     with _lock:
-        _state["ready"] = False
-        model, cfg = load_model(str(path), _device)
-        vocab = load_vocab(cfg.vocab_path)
         _model = model
         _cfg = cfg
-        _tokenizer = AutoTokenizer.from_pretrained(cfg.text_model_name)
-        _idx_to_answer = {idx: ans for ans, idx in vocab.items()}
-        _transform = build_transforms(cfg, train=False)
+        _tokenizer = tokenizer
+        _idx_to_answer = idx_to_answer
+        _transform = transform
         _state["checkpoint"] = name
         _state["has_attention"] = cfg.fusion == "cross_attention"
         _state["ready"] = True
