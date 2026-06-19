@@ -122,6 +122,10 @@ func (a *App) getJSON(path string, out any) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		b, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GET %s trả về %d: %s", path, resp.StatusCode, string(b))
+	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
@@ -168,7 +172,9 @@ func (a *App) Predict(imageB64 string, question string) (PredictResp, error) {
 	if _, err := fw.Write(raw); err != nil {
 		return pr, err
 	}
-	_ = w.WriteField("question", question)
+	if err := w.WriteField("question", question); err != nil {
+		return pr, err
+	}
 	w.Close()
 
 	resp, err := a.client.Post(a.baseURL+"/predict", w.FormDataContentType(), &buf)

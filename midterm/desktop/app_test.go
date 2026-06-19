@@ -79,3 +79,30 @@ func TestPredictErrorsOnNon200(t *testing.T) {
 		t.Fatal("mong đợi lỗi khi status != 200")
 	}
 }
+
+func TestCheckpointsParsesJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"checkpoints":["concat","cross_attention"],"current":"concat"}`))
+	}))
+	defer srv.Close()
+	a := newTestApp(srv)
+	c, err := a.Checkpoints()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Checkpoints) != 2 || c.Current != "concat" {
+		t.Fatalf("parse sai: %+v", c)
+	}
+}
+
+func TestLoadCheckpointErrorsOnNon200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(404)
+		w.Write([]byte(`{"error":"không tìm thấy checkpoint"}`))
+	}))
+	defer srv.Close()
+	a := newTestApp(srv)
+	if _, err := a.LoadCheckpoint("khong_ton_tai"); err == nil {
+		t.Fatal("mong đợi lỗi khi status != 200")
+	}
+}
