@@ -1,19 +1,47 @@
-# README
+# MedVQA Desktop Demo (Go + Wails)
 
-## About
+App demo model MedVQA: upload ảnh y khoa + nhập câu hỏi tiếng Anh → đáp án
+(top-5) và heatmap attention (khi checkpoint là `cross_attention`).
 
-This is the official Wails React-TS template.
+## Kiến trúc
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+```
+React (frontend) ──Wails bindings──► Go (app.go) ──HTTP localhost──► Python sidecar
+                                                                     (midterm/serve.py)
+```
 
-## Live Development
+Sidecar (`midterm/serve.py`, Flask) load model PyTorch một lần và giữ nóng; Go
+spawn nó lúc khởi động (cổng tự do) và kill khi đóng app. Tái dùng toàn bộ logic
+model trong `midterm/` — không nhân đôi.
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+## Yêu cầu
 
-## Building
+- `.venv` ở repo root đã cài `requirements.txt` (gồm `flask`).
+- Có ít nhất 1 checkpoint trong `midterm/checkpoints/` (vd `concat.pt`).
+  Để có heatmap cần `cross_attention.pt`.
+- Go 1.26+, Wails v2.12+, Node 18+.
 
-To build a redistributable, production mode package, use `wails build`.
+## Chạy (dev)
+
+```bash
+cd midterm/desktop
+wails dev
+```
+
+App tự tìm repo root (thư mục chứa `.venv` + `midterm`). Nếu chạy từ nơi khác,
+đặt biến môi trường `DEEPLEARNING_ROOT=/đường/dẫn/repo`.
+
+## Build (chạy local)
+
+```bash
+cd midterm/desktop
+wails build
+# → build/bin/desktop.app  (chạy trên máy có sẵn .venv tại repo root)
+```
+
+## Cách dùng
+
+1. Chọn checkpoint ở góc phải (đổi sẽ reload model ~20s).
+2. Kéo-thả / chọn ảnh.
+3. Gõ câu hỏi tiếng Anh → **Run**.
+4. Xem đáp án top-5; với `cross_attention` xem thêm heatmap.
