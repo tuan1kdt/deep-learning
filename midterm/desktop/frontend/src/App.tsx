@@ -9,7 +9,7 @@ import { main } from "../wailsjs/go/models";
 import { formatProb, stripDataUrl } from "./lib";
 import "./App.css";
 
-type Phase = "loading" | "ready" | "predicting" | "switching";
+type Phase = "loading" | "ready" | "predicting" | "switching" | "failed";
 
 function App() {
   const [phase, setPhase] = useState<Phase>("loading");
@@ -22,9 +22,11 @@ function App() {
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Poll /health khi khởi động cho tới khi model sẵn sàng
+  // Poll /health khi khởi động cho tới khi model sẵn sàng (tối đa ~90s)
   useEffect(() => {
     let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 90;
     const poll = async () => {
       try {
         const h = await Health();
@@ -39,7 +41,16 @@ function App() {
       } catch {
         /* sidecar chưa lên — thử lại */
       }
-      if (!cancelled) setTimeout(poll, 1000);
+      if (cancelled) return;
+      attempts += 1;
+      if (attempts >= MAX_ATTEMPTS) {
+        setError(
+          "Không khởi động được model sau 90 giây. Kiểm tra .venv ở repo root và checkpoint trong midterm/checkpoints/, và xem log terminal."
+        );
+        setPhase("failed");
+        return;
+      }
+      setTimeout(poll, 1000);
     };
     poll();
     return () => {
@@ -86,7 +97,7 @@ function App() {
     }
   };
 
-  const busy = phase === "loading" || phase === "predicting" || phase === "switching";
+  const busy = phase === "loading" || phase === "predicting" || phase === "switching" || phase === "failed";
   const canRun = phase === "ready" && !!imageB64 && !!question.trim();
   const top1 = result?.answers?.[0];
 
@@ -109,12 +120,13 @@ function App() {
               ))}
             </select>
           </label>
-          <span className={`dot ${phase === "ready" ? "ok" : "wait"}`} />
+          <span className={`dot ${phase === "ready" ? "ok" : phase === "failed" ? "fail" : "wait"}`} />
           <span>
             {phase === "loading" && "Đang tải model…"}
             {phase === "switching" && "Đang đổi checkpoint…"}
             {phase === "predicting" && "Đang suy luận…"}
             {phase === "ready" && "Sẵn sàng"}
+            {phase === "failed" && "Không khởi động được"}
           </span>
         </div>
       </header>

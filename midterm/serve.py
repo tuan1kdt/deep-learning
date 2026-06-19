@@ -104,6 +104,9 @@ def render_heatmap(attn: torch.Tensor, image: Image.Image) -> str:
 
 def run_inference(image: Image.Image, question: str) -> dict:
     """Chạy model trên (ảnh, câu hỏi) → top-5 + heatmap (nếu cross_attention)."""
+    # _lock guards the write/swap side in load_checkpoint; lock-free reads here
+    # are safe under the single-client desktop assumption (Run is disabled while
+    # switching, so load_checkpoint and run_inference never race).
     pixel = _transform(image).unsqueeze(0).to(_device)
     tokens = _tokenizer(question, padding="max_length", truncation=True,
                         max_length=_cfg.max_question_len, return_tensors="pt")

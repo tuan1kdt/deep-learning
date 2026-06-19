@@ -19,7 +19,7 @@ model trong `midterm/` — không nhân đôi.
 - `.venv` ở repo root đã cài `requirements.txt` (gồm `flask`).
 - Có ít nhất 1 checkpoint trong `midterm/checkpoints/` (vd `concat.pt`).
   Để có heatmap cần `cross_attention.pt`.
-- Go 1.26+, Wails v2.12+, Node 18+.
+- Go 1.26+, Wails v2.12+, Node 18+ (đã test trên Node 22).
 
 ## Chạy (dev)
 

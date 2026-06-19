@@ -112,6 +112,8 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	if a.cmd != nil && a.cmd.Process != nil {
+		// Deliberate hard kill of the sidecar: OnShutdown fires before the Go
+		// process exits, so the OS will reap the child cleanly — no zombie risk.
 		_ = a.cmd.Process.Kill()
 	}
 }

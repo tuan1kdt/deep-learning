@@ -175,6 +175,11 @@
   animation: pulse 1.1s ease-in-out infinite;
 }
 
+.dot.fail {
+  background: var(--danger);
+  box-shadow: 0 0 0 4px rgba(214, 69, 80, 0.18);
+}
+
 @keyframes pulse {
   0%,
   100% {
