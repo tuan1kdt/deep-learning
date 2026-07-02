@@ -34,3 +34,6 @@ midterm_medvqa/
 /data/MNIST/raw/train-images-idx3-ubyte.gz
 /data/MNIST/raw/train-labels-idx1-ubyte
 /data/MNIST/raw/train-labels-idx1-ubyte.gz
+
+# Corpus Tatoeba en-vi (day6) — script tự tải lại
+/data/tatoeba_envi/
