@@ -315,21 +315,207 @@ class MoHinhDich(nn.Module):
         return torch.stack(cac_logits, dim=1)        # (B, T-1, n_tu_vi)
 
 
-if __name__ == "__main__":
+# ---------------------------------------------------------------------------
+# Bước 4: Huấn luyện
+# ---------------------------------------------------------------------------
+def chay_epoch(model, loader, ham_loss, optimizer=None, tf_ratio=TF_RATIO):
+    """Chạy trọn 1 epoch. Có optimizer → train; không có → đánh giá (val).
+
+    Val dùng teacher forcing 100%: loss khi đó đo "khả năng đoán từ tiếp theo
+    khi biết toàn bộ tiền tố thật" — ổn định và so sánh được giữa các epoch,
+    không phụ thuộc vào chuỗi lỗi tự sinh của model.
+    """
+    dang_train = optimizer is not None
+    model.train(dang_train)
+    tong_loss, so_buoc = 0.0, 0
+    with torch.set_grad_enabled(dang_train):
+        for src, do_dai_src, tgt in loader:
+            src, tgt = src.to(DEVICE), tgt.to(DEVICE)
+            logits = model(src, do_dai_src, tgt, tf_ratio if dang_train else 1.0)
+            # Gộp mọi bước thời gian của cả batch thành một batch phẳng cho
+            # cross-entropy; ignore_index=PAD → ô pad không đóng góp vào loss.
+            loss = ham_loss(logits.reshape(-1, logits.size(-1)),
+                            tgt[:, 1:].reshape(-1))
+            if dang_train:
+                optimizer.zero_grad()
+                loss.backward()
+                # Chặn norm gradient: một batch "xấu" có thể tạo gradient khổng
+                # lồ làm hỏng cả quá trình train (exploding gradient của RNN).
+                nn.utils.clip_grad_norm_(model.parameters(), CLIP)
+                optimizer.step()
+            tong_loss += loss.item()
+            so_buoc += 1
+    return tong_loss / so_buoc
+
+
+# ---------------------------------------------------------------------------
+# Bước 5: Suy luận (greedy decoding) và đánh giá BLEU
+# ---------------------------------------------------------------------------
+@torch.no_grad()
+def dich(model, cau_en, td_en, td_vi):
+    """Dịch 1 câu bằng greedy decoding: mỗi bước chọn từ có logit cao nhất.
+
+    Greedy đơn giản nhưng tham lam — chọn sai một từ là không quay lại được.
+    Beam search giữ k ứng viên tốt nhất mỗi bước sẽ dịch tốt hơn (bài tập).
+    Trả về (list token đích, ma trận attention (T_ra, S) để vẽ heatmap).
+    """
+    model.eval()
+    src = torch.tensor([td_en.ma_hoa(chuan_hoa(cau_en))], device=DEVICE)
+    do_dai = torch.tensor([src.size(1)])
+    h_enc, hidden = model.ma_hoa(src, do_dai)
+    mask = src != PAD
+    y = torch.tensor([SOS], device=DEVICE)
+    tu_ra, cac_alpha = [], []
+    for _ in range(MAX_DECODE_LEN):
+        logits, hidden, alpha = model.giai_ma(y, hidden, h_enc, mask)
+        y = logits.argmax(dim=1)
+        cac_alpha.append(alpha.squeeze(0).cpu())
+        if y.item() == EOS:
+            tu_ra.append("<eos>")
+            break
+        tu_ra.append(td_vi.tu[y.item()])
+    return tu_ra, torch.stack(cac_alpha).numpy()
+
+
+def n_gram(tu, n):
+    return [tuple(tu[i:i + n]) for i in range(len(tu) - n + 1)]
+
+
+def bleu_corpus(cac_ref, cac_hyp):
+    """BLEU-4 mức corpus (Papineni 2002), không smoothing.
+
+    - Precision bị "clip": mỗi n-gram trong bản dịch máy chỉ được tính tối đa
+      bằng số lần nó có mặt trong tham chiếu — chặn kiểu ăn gian lặp từ
+      ("the the the" không được 3 điểm unigram "the").
+    - Brevity penalty phạt bản dịch ngắn hơn tham chiếu, vì precision thuần
+      không phạt việc dịch thiếu (câu 2 từ đều đúng → precision 100%!).
+    - Cộng dồn số đếm trên TOÀN corpus rồi mới tính (corpus-level), không
+      lấy trung bình BLEU từng câu.
+    """
+    khop = [0] * 4
+    tong = [0] * 4
+    len_ref = len_hyp = 0
+    for ref, hyp in zip(cac_ref, cac_hyp):
+        len_ref += len(ref)
+        len_hyp += len(hyp)
+        for n in range(1, 5):
+            dem_ref = Counter(n_gram(ref, n))
+            dem_hyp = Counter(n_gram(hyp, n))
+            khop[n - 1] += sum(min(c, dem_ref[g]) for g, c in dem_hyp.items())
+            tong[n - 1] += max(len(hyp) - n + 1, 0)
+    if min(khop) == 0:  # không khớp nổi n-gram nào ở một bậc → BLEU = 0
+        return 0.0
+    log_p = sum(math.log(k / t) for k, t in zip(khop, tong)) / 4
+    bp = 1.0 if len_hyp > len_ref else math.exp(1 - len_ref / len_hyp)
+    return 100 * bp * math.exp(log_p)
+
+
+# ---------------------------------------------------------------------------
+# Bước 6: Vẽ kết quả
+# ---------------------------------------------------------------------------
+def ve_loss(loss_train, loss_val):
+    fig, ax = plt.subplots(figsize=(8, 5))
+    cac_epoch = range(1, len(loss_train) + 1)
+    ax.plot(cac_epoch, loss_train, color="#1f77b4", linewidth=2, label="train")
+    ax.plot(cac_epoch, loss_val, color="#d95f02", linewidth=2, label="validation")
+    ax.set_xlabel("epoch")
+    ax.set_ylabel("cross-entropy loss")
+    ax.set_title("Seq2Seq + Attention — training loss")
+    ax.grid(alpha=0.3)
+    ax.legend()
+    fig.tight_layout()
+    out = os.path.join(DAY_DIR, "seq2seq_loss.png")
+    fig.savefig(out, dpi=120)
+    print(f"Đã lưu {out}")
+
+
+def ve_heatmap(model, cac_cau, td_en, td_vi):
+    """Heatmap attention cho vài câu val: trục x = token nguồn (EN), trục y =
+    token đích model sinh ra (VI); ô càng đậm = trọng số attention càng lớn.
+
+    Với cặp Anh-Việt trật tự từ khá giống nhau nên kỳ vọng thấy một "đường
+    chéo" mờ — mỗi từ đích chủ yếu nhìn vào từ nguồn cùng vị trí tương đối.
+    """
+    # layout="constrained" tự chừa chỗ cho colorbar chung và tick label xoay 45°
+    fig, cac_ax = plt.subplots(2, 2, figsize=(12, 10), layout="constrained")
+    for i, (ax, (en, _)) in enumerate(zip(cac_ax.flat, cac_cau)):
+        tu_ra, alpha = dich(model, en, td_en, td_vi)
+        tu_vao = chuan_hoa(en).split() + ["<eos>"]
+        im = ax.imshow(alpha, cmap="Blues", vmin=0.0, vmax=1.0, aspect="auto")
+        ax.set_xticks(range(len(tu_vao)), tu_vao, rotation=45, ha="right")
+        ax.set_yticks(range(len(tu_ra)), tu_ra)
+        # 4 ô cùng ý nghĩa trục → chỉ ghi nhãn ở mép ngoài cho đỡ rối
+        if i >= 2:
+            ax.set_xlabel("câu nguồn (EN)")
+        if i % 2 == 0:
+            ax.set_ylabel("câu sinh ra (VI)")
+    fig.colorbar(im, ax=[a for a in cac_ax.flat], label="trọng số attention α",
+                 shrink=0.8)
+    fig.suptitle("Decoder 'nhìn' vào từ nguồn nào khi sinh từng từ đích?")
+    out = os.path.join(DAY_DIR, "attention_heatmap.png")
+    fig.savefig(out, dpi=120)
+    print(f"Đã lưu {out}")
+
+
+# ---------------------------------------------------------------------------
+# Ghép tất cả lại
+# ---------------------------------------------------------------------------
+def main():
+    print(f"Thiết bị: {DEVICE}")
+
+    # --- Dữ liệu ---
     duong_dan = tai_du_lieu()
-    train, val = chia_train_val(doc_cap_cau(duong_dan))
+    cap_cau = doc_cap_cau(duong_dan)
+    train, val = chia_train_val(cap_cau)
     td_en = TuDien(en for en, _ in train)
     td_vi = TuDien(vi for _, vi in train)
-    loader = DataLoader(DuLieuDich(train, td_en, td_vi), batch_size=BATCH_SIZE,
-                        shuffle=True, collate_fn=gop_batch)
-    src, do_dai, tgt = next(iter(loader))
+    print(f"Cặp câu sau lọc: {len(cap_cau)} (train {len(train)}, val {len(val)})")
+    print(f"Vocab EN: {len(td_en)} | Vocab VI: {len(td_vi)}")
+
+    loader_train = DataLoader(DuLieuDich(train, td_en, td_vi),
+                              batch_size=BATCH_SIZE, shuffle=True,
+                              collate_fn=gop_batch)
+    loader_val = DataLoader(DuLieuDich(val, td_en, td_vi),
+                            batch_size=BATCH_SIZE, shuffle=False,
+                            collate_fn=gop_batch)
+
+    # --- Model & huấn luyện ---
     model = MoHinhDich(len(td_en), len(td_vi)).to(DEVICE)
-    logits = model(src.to(DEVICE), do_dai, tgt.to(DEVICE), tf_ratio=0.5)
-    print(f"Thiết bị: {DEVICE}")
-    print(f"logits: {tuple(logits.shape)}  (kỳ vọng ({src.size(0)}, {tgt.size(1) - 1}, {len(td_vi)}))")
-    assert logits.shape == (src.size(0), tgt.size(1) - 1, len(td_vi))
-    h_enc, hidden = model.ma_hoa(src.to(DEVICE), do_dai)
-    _, alpha = model.giai_ma.chu_y(hidden[-1], h_enc, (src != PAD).to(DEVICE))
-    print(f"tổng alpha (phải ≈1): {[round(x, 4) for x in alpha.sum(dim=1)[:3].tolist()]}")
-    n = sum(p.numel() for p in model.parameters())
-    print(f"Số tham số: {n:,}")
+    print(f"Số tham số: {sum(p.numel() for p in model.parameters()):,}")
+    ham_loss = nn.CrossEntropyLoss(ignore_index=PAD)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+
+    lich_su_train, lich_su_val = [], []
+    for epoch in range(1, EPOCHS + 1):
+        t0 = time.time()
+        loss_train = chay_epoch(model, loader_train, ham_loss, optimizer)
+        loss_val = chay_epoch(model, loader_val, ham_loss)
+        lich_su_train.append(loss_train)
+        lich_su_val.append(loss_val)
+        print(f"Epoch {epoch:2d}/{EPOCHS} | loss train {loss_train:.3f} "
+              f"| loss val {loss_val:.3f} | {time.time() - t0:.0f}s")
+
+    # --- BLEU trên tập val: toàn câu model CHƯA TỪNG thấy lúc train ---
+    cac_ref, cac_hyp = [], []
+    for en, vi in val:
+        tu_ra, _ = dich(model, en, td_en, td_vi)
+        cac_hyp.append([t for t in tu_ra if t != "<eos>"])
+        cac_ref.append(vi.split())
+    print(f"\nBLEU-4 trên {len(val)} câu val: {bleu_corpus(cac_ref, cac_hyp):.1f}")
+
+    # --- Dịch mẫu để xem chất lượng bằng mắt ---
+    print("\nMột vài câu dịch mẫu (từ tập val):")
+    for en, vi in val[:10]:
+        tu_ra, _ = dich(model, en, td_en, td_vi)
+        may = " ".join(t for t in tu_ra if t != "<eos>")
+        print(f"  EN : {en}\n  REF: {vi}\n  MÁY: {may}\n")
+
+    # --- Vẽ ---
+    ve_loss(lich_su_train, lich_su_val)
+    # Chọn câu val độ dài vừa phải cho heatmap dễ đọc
+    cau_heatmap = [c for c in val if 4 <= len(c[0].split()) <= 8][:4]
+    ve_heatmap(model, cau_heatmap, td_en, td_vi)
+
+
+if __name__ == "__main__":
+    main()
