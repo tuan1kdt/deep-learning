@@ -56,7 +56,8 @@ không kiểm chứng được gì về khả năng fusion.
  │   → maxpool 2x2  │                │        ↓          │
  │  conv3x3 → ReLU  │                │   LSTM(16 → 32)   │
  │   → maxpool 2x2  │                │  lấy hidden CUỐI  │
- │ flatten → Linear → ReLU           │                    │
+ │ flatten → Linear │                │                   │
+ │      → ReLU      │                │                   │
  └─────────────────┘                └──────────────────┘
         │ f_img  (64 chiều)                 │ f_txt  (32 chiều)
         └───────────────────┬───────────────┘
