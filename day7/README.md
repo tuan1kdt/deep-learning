@@ -47,37 +47,38 @@ không kiểm chứng được gì về khả năng fusion.
 ## 2. Kiến trúc 1: fusion bằng concat (sơ đồ trên bảng)
 
 ```
- ảnh MNIST [1,28,28]                caption "cộng k" [2 token]
-        │                                   │
-        ▼                                   ▼
- ┌─────────────────┐                ┌──────────────────┐
- │   ImageEncoder   │                │    TextEncoder    │
- │  conv3x3 → ReLU  │                │  Embedding(12,16) │
- │   → maxpool 2x2  │                │        ↓          │
- │  conv3x3 → ReLU  │                │   LSTM(16 → 32)   │
- │   → maxpool 2x2  │                │  lấy hidden CUỐI  │
- │ flatten → Linear │                │                   │
- │      → ReLU      │                │                   │
- └─────────────────┘                └──────────────────┘
-        │ f_img  (64 chiều)                 │ f_txt  (32 chiều)
-        └───────────────────┬───────────────┘
-                             ▼
-                 concat  [f_img ; f_txt]  ∈ R^96      ← FUSION
-                             │
-                             ▼
-                   ┌──────────────────┐
-                   │   FC head        │
-                   │ Linear(96→64)    │
-                   │ ReLU             │
-                   │ Linear(64→10)    │
-                   └──────────────────┘
-                             │
-                             ▼
-                    logits (10 lớp) → CrossEntropyLoss(., y)
-                             │
-              ◄══════════════╝  gradient lan ngược qua TOÀN BỘ sơ đồ
+ ảnh MNIST [1,28,28]               caption "cộng k" [2 token]
+          │                                 │
+          ▼                                 ▼
+ ┌────────────────┐                ┌────────────────┐
+ │  ImageEncoder  │                │  TextEncoder   │
+ │ conv3x3 → ReLU │                │Embedding(12,16)│
+ │ → maxpool 2x2  │                │       ↓        │
+ │ conv3x3 → ReLU │                │ LSTM(16 → 32)  │
+ │ → maxpool 2x2  │                │lấy hidden CUỐI │
+ │flatten → Linear│                │                │
+ │     → ReLU     │                │                │
+ └────────────────┘                └────────────────┘
+          │                                 │
+          f_img  (64 chiều)                 f_txt  (32 chiều)
+          └────────────────┬────────────────┘
+                           ▼
+            concat  [f_img ; f_txt]  ∈ R^96      ← FUSION
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │   FC head   │
+                    │Linear(96→64)│
+                    │     ReLU    │
+                    │Linear(64→10)│
+                    └─────────────┘
+                           │
+                           ▼
+                   logits (10 lớp) → CrossEntropyLoss(., y)
+                           │
+              ◄════════════╝  gradient lan ngược qua TOÀN BỘ sơ đồ
      optimizer.step()  ⇒  cập nhật θ_CNN, θ_LSTM, θ_head CÙNG MỘT LÚC
-                          ("update parameter ở đây")
+                     ("update parameter ở đây")
 ```
 
 **Nhánh ảnh (`ImageEncoder`)**: hai tầng `Conv2d(kernel_size=3, padding=1)`.
@@ -89,7 +90,7 @@ vòng cong) bất kể chúng xuất hiện ở đâu trong ảnh. Sau mỗi con
 kích thước không gian giảm một nửa mỗi chiều (28→14→7), đồng thời tăng dần
 "tầm nhìn" (receptive field) của các tầng sau. Sau hai tầng conv+pool, bản đồ
 đặc trưng `[32, 7, 7]` được `Flatten` thành vector 1568 chiều rồi qua
-`Linear(1568, 64)` nén về đúng $D_{img} = 64$ chiều — đây là $f_{img}$.
+`Linear(1568, 64)` rồi `ReLU`, nén về đúng $D_{img} = 64$ chiều — đây là $f_{img}$.
 
 **Nhánh text (`TextEncoder`)**: `Embedding` là một bảng tra cứu — mỗi token
 (ví dụ từ "cộng", "ba") có một chỉ số nguyên, và bảng embedding ánh xạ chỉ số
@@ -139,7 +140,7 @@ nhất cập nhật đồng thời $\theta_{CNN}$, $\theta_{LSTM}$, $\theta_{hea
 rồi cache lại dưới dạng tensor thô — training loop chỉ học trên những features
 đã đông cứng đó, không có gradient nào qua backbone cả. Ở day 7, ngược lại:
 gradient chảy **end-to-end** qua cả CNN lẫn LSTM, một lệnh `optimizer.step()`
-duy nhất cập nhật mọi tham số cùng lúc, đồng lúc chịu áp lực từ một loss duy
+duy nhất cập nhật mọi tham số cùng lúc, cùng chịu áp lực từ một loss duy
 nhất. Đây là **train end-to-end** đúng nghĩa, khác hẳn cách "train từng nhánh
 riêng rồi ghép" (ví dụ: train sẵn một classifier ảnh, một classifier text,
 rồi mới ghép feature — cách này không có gradient chung nên hai nhánh không
@@ -183,7 +184,7 @@ Concat là fusion đơn giản nhất nhưng không phải duy nhất. Vài hư�
   hai vector logits, hoặc vote. Ưu điểm: hai nhánh có thể train/đánh giá tách
   rời; nhược điểm: mất khả năng học các tương tác *phi tuyến giữa hai
   modality* trước khi ra quyết định (xem bài tập 2 — vì sao bài toán ngày 7
-  vẫn giải được bằng late fusion).
+  *không* giải trọn vẹn được bằng late fusion).
 - **Fusion bằng phép nhân/gating**: thay vì nối cạnh nhau, dùng một phép nhân
   từng phần tử có điều kiện, ví dụ $f_{img} \odot (W \cdot f_{txt})$ — nhánh
   text đóng vai trò "cổng" (gate) điều chỉnh nhánh ảnh, cho phép mô hình hoá
@@ -205,13 +206,16 @@ Concat là fusion đơn giản nhất nhưng không phải duy nhất. Vài hư�
    (`f_img + f_txt`). Accuracy thay đổi thế nào so với concat? Gợi ý: cộng mất
    thông tin "thành phần nào tới từ nhánh nào" mà concat giữ nguyên — head sau
    đó phải tự suy luận nhiều hơn từ một không gian chung.
-2. **Late fusion**: tạo hai head riêng — một head chỉ nhận $f_{img}$, một head
-   chỉ nhận $f_{txt}$ — rồi **cộng hai logits** lại trước softmax. Vì sao bài
-   này late fusion vẫn giải được, dù mỗi nhánh riêng lẻ "không đủ thông tin"?
-   Gợi ý: $(d+k) \bmod 10$ có cấu trúc **cộng** — nếu mỗi head học cách xuất
-   ra một phân phối phù hợp (kiểu "dịch chuyển vòng" theo giá trị nhánh đó
-   biết), tổng hai logit có thể tái tạo lại phép cộng modulo mà không cần
-   tương tác phi tuyến giữa hai nhánh.
+2. **Late fusion**: thử late fusion — hai head riêng cho từng nhánh (một head
+   chỉ nhận $f_{img}$, một head chỉ nhận $f_{txt}$) rồi **cộng hai logits**
+   lại trước softmax. Accuracy đạt tối đa bao nhiêu? Vì sao không thể đạt
+   ~98% như concat? Gợi ý: xét bộ bốn input $(d,k)$, $(d+5,k)$, $(d,k+5)$,
+   $(d+5,k+5)$ — nhãn của chúng là $t_1, t_2, t_2, t_1$ (với $t_2 = t_1 + 5
+   \bmod 10$), nên cộng logits không thể phân loại đúng cả bốn cùng lúc
+   (viết 4 bất đẳng thức "nhãn đúng thắng nhãn còn lại" rồi cộng lại sẽ ra
+   mâu thuẫn $0 > 0$; đây chính là cấu trúc **XOR** — không thể phân tách
+   bằng tổng). Trần lý thuyết: **75%**. Phép cộng modulo đòi hỏi tương tác
+   *phi tuyến* giữa hai modality — chính là điều late fusion đánh mất.
 3. **Nhiễu trong caption**: với xác suất 10%, đổi $k$ trong caption thành một
    số ngẫu nhiên khác (caption "nói dối"). Accuracy trần (đạt được sau khi
    train hội tụ) còn bao nhiêu? Có thể suy ra cận trên lý thuyết từ tỉ lệ

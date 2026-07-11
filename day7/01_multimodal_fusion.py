@@ -43,7 +43,7 @@ D_EMB = 16      # số chiều embedding của một token text
 D_TXT = 32      # số chiều hidden LSTM = vector đặc trưng nhánh text
 N_CLASSES = 10  # nhãn = (d + k) mod 10 nên vẫn là 10 lớp
 
-random.seed(SEED)
+random.seed(SEED)  # phòng hờ — dataset dùng RNG riêng, nhưng cứ ghim seed toàn cục cho chắc
 torch.manual_seed(SEED)
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
