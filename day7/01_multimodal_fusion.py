@@ -101,17 +101,83 @@ def make_loaders():
     return train_loader, test_loader
 
 
-# --- kiểm tra nhanh data pipeline (Task 2 sẽ thay phần này bằng model) ---
+# ---------------------------------------------------------------------------
+# Nhánh ảnh: CNN nhỏ — 2 tầng conv, mỗi tầng giảm nửa kích thước không gian
+# ---------------------------------------------------------------------------
+class ImageEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),  # [B,16,28,28]
+            nn.ReLU(),
+            nn.MaxPool2d(2),                             # [B,16,14,14]
+            nn.Conv2d(16, 32, kernel_size=3, padding=1), # [B,32,14,14]
+            nn.ReLU(),
+            nn.MaxPool2d(2),                             # [B,32,7,7]
+            nn.Flatten(),
+            nn.Linear(32 * 7 * 7, D_IMG),                # nén về vector D_IMG chiều
+            nn.ReLU(),
+        )
+
+    def forward(self, img):
+        return self.net(img)  # [B, D_IMG]
+
+
+# ---------------------------------------------------------------------------
+# Nhánh text: Embedding + LSTM — lấy hidden state cuối làm đặc trưng cả câu
+# ---------------------------------------------------------------------------
+class TextEncoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.emb = nn.Embedding(VOCAB_SIZE, D_EMB, padding_idx=PAD)
+        self.lstm = nn.LSTM(D_EMB, D_TXT, batch_first=True)
+
+    def forward(self, caption):
+        # caption [B,2] -> emb [B,2,D_EMB] -> LSTM đọc lần lượt từng token
+        _, (h, _) = self.lstm(self.emb(caption))
+        # h [1,B,D_TXT]: hidden state SAU token cuối — tóm tắt toàn bộ câu
+        return h[-1]  # [B, D_TXT]
+
+
+# ---------------------------------------------------------------------------
+# Fusion + combined model: concat 2 vector đặc trưng rồi qua FC head
+# ---------------------------------------------------------------------------
+class MultimodalNet(nn.Module):
+    """drop_img / drop_txt: thay đặc trưng nhánh đó bằng 0 — dùng cho ablation
+    sau khi train, chứng minh model thật sự cần cả hai nguồn thông tin."""
+
+    def __init__(self):
+        super().__init__()
+        self.img_enc = ImageEncoder()
+        self.txt_enc = TextEncoder()
+        self.head = nn.Sequential(
+            nn.Linear(D_IMG + D_TXT, 64),
+            nn.ReLU(),
+            nn.Linear(64, N_CLASSES),
+        )
+
+    def forward(self, img, caption, drop_img=False, drop_txt=False):
+        f_img = self.img_enc(img)      # [B, D_IMG]
+        f_txt = self.txt_enc(caption)  # [B, D_TXT]
+        if drop_img:
+            f_img = torch.zeros_like(f_img)
+        if drop_txt:
+            f_txt = torch.zeros_like(f_txt)
+        # ĐÂY là "fusion" trên bảng: ghép 2 modality thành 1 vector duy nhất.
+        # Concat là cách đơn giản nhất; gradient từ head sẽ tự tách về đúng
+        # từng nhánh (xem README — mục luồng gradient).
+        fused = torch.cat([f_img, f_txt], dim=1)  # [B, D_IMG + D_TXT]
+        return self.head(fused)  # logits [B, N_CLASSES]
+
+
+# --- kiểm tra nhanh forward pass (Task 3 sẽ thay bằng vòng train đầy đủ) ---
 if __name__ == "__main__":
     train_loader, test_loader = make_loaders()
+    model = MultimodalNet().to(DEVICE)
+    n_params = sum(p.numel() for p in model.parameters())
+    print(f"model có {n_params:,} tham số")
     img, caption, label = next(iter(train_loader))
-    print(f"batch ảnh   : {tuple(img.shape)}")      # (128, 1, 28, 28)
-    print(f"batch text  : {tuple(caption.shape)}")  # (128, 2)
-    print(f"batch nhãn  : {tuple(label.shape)}")    # (128,)
-    inv = {v: k for k, v in VOCAB.items()}
-    ds = train_loader.dataset
-    for i in range(3):
-        im, cap, lab = ds[i]
-        digit = ds.base[i][1]
-        words = " ".join(inv[t.item()] for t in cap)
-        print(f'sample {i}: ảnh số {digit}, caption "{words}" -> nhãn {lab.item()}')
+    logits = model(img.to(DEVICE), caption.to(DEVICE))
+    print(f"logits: {tuple(logits.shape)}")  # (128, 10)
+    loss = nn.CrossEntropyLoss()(logits, label.to(DEVICE))
+    print(f"loss khởi đầu: {loss.item():.3f} (kỳ vọng ~ln(10) ≈ 2.303)")
