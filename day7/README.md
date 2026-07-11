@@ -56,7 +56,7 @@ không kiểm chứng được gì về khả năng fusion.
  │   → maxpool 2x2  │                │        ↓          │
  │  conv3x3 → ReLU  │                │   LSTM(16 → 32)   │
  │   → maxpool 2x2  │                │  lấy hidden CUỐI  │
- │ flatten → Linear │                │                    │
+ │ flatten → Linear → ReLU           │                    │
  └─────────────────┘                └──────────────────┘
         │ f_img  (64 chiều)                 │ f_txt  (32 chiều)
         └───────────────────┬───────────────┘
@@ -133,15 +133,16 @@ tiếp theo, `optimizer.step()`, mới là **"update parameter ở đây"** trê
 *toàn bộ* model (`img_enc` + `txt_enc` + `head`), nên một lệnh `step()` duy
 nhất cập nhật đồng thời $\theta_{CNN}$, $\theta_{LSTM}$, $\theta_{head}$.
 
-Đáng để so sánh với transfer learning ở **day 5**: ở đó ta *đóng băng*
-(freeze) backbone ResNet18 đã pretrain, chỉ train lớp cuối — gradient vẫn
-chảy ngược qua backbone (cần cho chain rule) nhưng `requires_grad=False` chặn
-việc cập nhật trọng số backbone. Ở day 7, không có phần nào bị đóng băng: cả
-CNN lẫn LSTM đều được **học từ đầu, đồng thời**, cùng chịu áp lực từ một loss
-duy nhất — đây là **train end-to-end** đúng nghĩa, khác hẳn cách "train từng
-nhánh riêng rồi ghép" (ví dụ: train sẵn một classifier ảnh, một classifier
-text, rồi mới ghép feature — cách này không có gradient chung nên hai nhánh
-không "biết" thương lượng với nhau).
+Đáng để so sánh với transfer learning ở **day 5**: ở đó, features được trích
+**một lần**, trong `torch.no_grad()` (backbone hoàn toàn ngoài vòng backward),
+rồi cache lại dưới dạng tensor thô — training loop chỉ học trên những features
+đã đông cứng đó, không có gradient nào qua backbone cả. Ở day 7, ngược lại:
+gradient chảy **end-to-end** qua cả CNN lẫn LSTM, một lệnh `optimizer.step()`
+duy nhất cập nhật mọi tham số cùng lúc, đồng lúc chịu áp lực từ một loss duy
+nhất. Đây là **train end-to-end** đúng nghĩa, khác hẳn cách "train từng nhánh
+riêng rồi ghép" (ví dụ: train sẵn một classifier ảnh, một classifier text,
+rồi mới ghép feature — cách này không có gradient chung nên hai nhánh không
+"biết" thương lượng với nhau).
 
 ## 4. Ablation: bằng chứng model dùng cả hai nguồn
 
