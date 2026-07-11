@@ -170,14 +170,88 @@ class MultimodalNet(nn.Module):
         return self.head(fused)  # logits [B, N_CLASSES]
 
 
-# --- kiểm tra nhanh forward pass (Task 3 sẽ thay bằng vòng train đầy đủ) ---
+# ---------------------------------------------------------------------------
+# Đánh giá: accuracy trên một loader; drop_img/drop_txt dùng cho ablation
+# ---------------------------------------------------------------------------
+@torch.no_grad()
+def evaluate(model, loader, drop_img=False, drop_txt=False):
+    model.eval()
+    correct = total = 0
+    for img, caption, label in loader:
+        img, caption, label = img.to(DEVICE), caption.to(DEVICE), label.to(DEVICE)
+        logits = model(img, caption, drop_img=drop_img, drop_txt=drop_txt)
+        correct += (logits.argmax(dim=1) == label).sum().item()
+        total += label.numel()
+    return correct / total
+
+
+# ---------------------------------------------------------------------------
+# Train end-to-end: MỘT optimizer cho toàn bộ (CNN + LSTM + head).
+# Đây chính là "update parameter ở đây" trên bảng — không train từng nhánh
+# riêng rồi ghép, mà loss cuối lan gradient về cập nhật tất cả cùng lúc.
+# ---------------------------------------------------------------------------
+def train_model(model, train_loader, test_loader):
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    criterion = nn.CrossEntropyLoss()
+    history = {"loss": [], "test_acc": []}
+
+    for epoch in range(1, EPOCHS + 1):
+        model.train()
+        running_loss = 0.0
+        for img, caption, label in train_loader:
+            img, caption, label = img.to(DEVICE), caption.to(DEVICE), label.to(DEVICE)
+            logits = model(img, caption)
+            loss = criterion(logits, label)
+            optimizer.zero_grad()
+            loss.backward()   # gradient chảy: head -> concat -> tách về CNN và LSTM
+            optimizer.step()  # cập nhật đồng thời tham số của CẢ HAI nhánh
+            running_loss += loss.item() * label.numel()
+
+        avg_loss = running_loss / len(train_loader.dataset)
+        test_acc = evaluate(model, test_loader)
+        history["loss"].append(avg_loss)
+        history["test_acc"].append(test_acc)
+        print(f"epoch {epoch:2d}/{EPOCHS} | train loss {avg_loss:.4f} | test acc {test_acc:.4f}")
+
+    return history
+
+
+# ---------------------------------------------------------------------------
+# Chạy: train -> ablation -> vẽ plot
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     train_loader, test_loader = make_loaders()
     model = MultimodalNet().to(DEVICE)
-    n_params = sum(p.numel() for p in model.parameters())
-    print(f"model có {n_params:,} tham số")
-    img, caption, label = next(iter(train_loader))
-    logits = model(img.to(DEVICE), caption.to(DEVICE))
-    print(f"logits: {tuple(logits.shape)}")  # (128, 10)
-    loss = nn.CrossEntropyLoss()(logits, label.to(DEVICE))
-    print(f"loss khởi đầu: {loss.item():.3f} (kỳ vọng ~ln(10) ≈ 2.303)")
+    print(f"thiết bị: {DEVICE} | tham số: {sum(p.numel() for p in model.parameters()):,}")
+
+    history = train_model(model, train_loader, test_loader)
+
+    # Ablation: tắt từng nhánh để thấy model có THẬT SỰ dùng cả hai không.
+    # Nhãn = (d + k) mod 10 phụ thuộc cả d (chỉ có trong ảnh) lẫn k (chỉ có
+    # trong text) — thiếu một nguồn thì về mặt thông tin chỉ còn đoán mò 10%.
+    acc_full = evaluate(model, test_loader)
+    acc_no_img = evaluate(model, test_loader, drop_img=True)
+    acc_no_txt = evaluate(model, test_loader, drop_txt=True)
+    print("\n--- Ablation trên tập test ---")
+    print(f"đủ cả hai nhánh    : {acc_full:.4f}")
+    print(f"tắt nhánh ảnh      : {acc_no_img:.4f}  (kỳ vọng ~0.10 — chỉ còn text)")
+    print(f"tắt nhánh text     : {acc_no_txt:.4f}  (kỳ vọng ~0.10 — chỉ còn ảnh)")
+
+    # Vẽ loss + accuracy theo epoch
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+    epochs_axis = range(1, EPOCHS + 1)
+    ax1.plot(epochs_axis, history["loss"], marker="o")
+    ax1.set_xlabel("epoch")
+    ax1.set_ylabel("train loss")
+    ax1.set_title("CrossEntropy loss")
+    ax2.plot(epochs_axis, history["test_acc"], marker="o", color="tab:green")
+    ax2.axhline(0.1, color="gray", linestyle="--", label="đoán mò (10%)")
+    ax2.set_xlabel("epoch")
+    ax2.set_ylabel("test accuracy")
+    ax2.set_title("Accuracy trên tập test")
+    ax2.legend()
+    fig.suptitle("Day 7 — Multimodal fusion: ảnh (CNN) + text (LSTM)")
+    fig.tight_layout()
+    out_path = os.path.join(DAY_DIR, "multimodal_loss_acc.png")
+    fig.savefig(out_path, dpi=120)
+    print(f"\nđã lưu plot: {out_path}")
