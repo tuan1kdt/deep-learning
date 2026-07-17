@@ -35,6 +35,14 @@ def test_roundtrip_decode_dung_o_eos():
     assert v.decode(full) == "a dog runs"
 
 
+def test_decode_bo_unk():
+    v = _vocab_nho()
+    ids = v.encode("a cat runs", max_words=20)       # cat → UNK
+    out = v.decode(ids + [EOS_ID])
+    assert out == "a runs"
+    assert "<unk>" not in out
+
+
 def test_save_load_giu_nguyen(tmp_path):
     v = _vocab_nho()
     p = tmp_path / "vocab.json"

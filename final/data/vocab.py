@@ -43,7 +43,7 @@ class Vocab:
             i = int(i)
             if i == EOS_ID:
                 break
-            if i in (PAD_ID, BOS_ID):
+            if i in (PAD_ID, BOS_ID, UNK_ID):
                 continue
             words.append(self.id2word.get(i, "<unk>"))
         return " ".join(words)
