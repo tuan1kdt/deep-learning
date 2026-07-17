@@ -1,0 +1,97 @@
+\chapter{THÍ NGHIỆM VÀ KẾT QUẢ}
+\label{chap:experiments}
+
+\textit{Chương này là khung chờ số liệu: mọi ô \TBD\ và hình placeholder sẽ được
+điền bằng kết quả thật từ \texttt{final/outputs/} sau khi các run huấn luyện
+hoàn tất. Cấu trúc bảng/hình được cố định từ trước để việc điền số không làm
+thay đổi bố cục báo cáo.}
+
+\section{Thiết lập}
+
+Bốn run chính, cùng seed 42, cùng đặc trưng ảnh và từ điển:
+(1)~LSTM+attention; (2)~Transformer; (3)~LSTM không attention (ablation);
+(4)~(mở rộng) SCST khởi động từ checkpoint tốt nhất. Đánh giá trên tập kiểm tra
+1.000 ảnh, mỗi ảnh 5 câu tham chiếu; BLEU dùng \texttt{nltk corpus\_bleu}
+(smoothing method~1), CIDEr dùng \texttt{pycocoevalcap}.
+
+\section{Kết quả định lượng}
+
+\begin{table}[H]
+	\centering
+	\caption{Kết quả trên tập kiểm tra Flickr8k (1.000 ảnh). B-n = BLEU-n.}
+	\label{tab:main-results}
+	\begin{tabular}{llccccc}
+		\hline
+		\textbf{Mô hình} & \textbf{Giải mã} & \textbf{B-1} & \textbf{B-2} & \textbf{B-3} & \textbf{B-4} & \textbf{CIDEr} \\
+		\hline
+		LSTM+attn        & greedy   & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		LSTM+attn        & beam 3   & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		LSTM+attn        & beam 5   & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		Transformer      & greedy   & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		Transformer      & beam 3   & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		Transformer      & beam 5   & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		LSTM không attn  & greedy   & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		\emph{(mở rộng)} +SCST & greedy & \TBD & \TBD & \TBD & \TBD & \TBD \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Nhận xét: \TBD\ (so sánh theo ba trục: kiến trúc, attention, cách giải mã;
+đối chiếu với các số tham khảo của \emph{Show, Attend and Tell} trên Flickr8k).
+
+\section{Quá trình học}
+
+\begin{figure}[H]
+	\centering
+	\placeholderfig{0.85\textwidth}{5.5cm}
+	\caption{Đường cong loss huấn luyện/kiểm định của LSTM+attention và
+	Transformer (cùng trục, cùng seed). Nguồn: \texttt{outputs/curves.png}.}
+	\label{fig:curves}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\placeholderfig{0.85\textwidth}{4.5cm}
+	\caption{Caption của cùng 2--3 ảnh cố định ở epoch 1/5/cuối --- minh họa mô
+	hình ``trưởng thành'' qua quá trình học.}
+	\label{fig:samples-by-epoch}
+\end{figure}
+
+Phân tích: \TBD\ (tốc độ hội tụ, dấu hiệu overfit, ảnh hưởng của warmup với
+Transformer trên dữ liệu nhỏ).
+
+\section{Phân tích định tính: attention nhìn đâu khi sinh từ}
+
+\begin{figure}[H]
+	\centering
+	\placeholderfig{0.9\textwidth}{6cm}
+	\caption{Ca thành công: bản đồ nhiệt attention theo từng từ sinh ra (LSTM:
+	trọng số Bahdanau; Transformer: cross-attention tầng cuối, trung bình các
+	đầu), overlay lưới $7\times7$ nội suy lên ảnh gốc.}
+	\label{fig:attn-success}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\placeholderfig{0.9\textwidth}{6cm}
+	\caption{Ca thất bại kèm phân tích: vật thể hiếm, đếm sai, hallucination.}
+	\label{fig:attn-failure}
+\end{figure}
+
+Nhận xét: \TBD\ (3--4 ca thành công, 2--3 ca thất bại; attention có bám đúng
+vùng chứa danh từ/động từ không; khác biệt giữa attention một đầu của LSTM và
+đa đầu của Transformer).
+
+\section{Bàn luận}
+
+\begin{itemize}
+	\item \textbf{LSTM và Transformer trên dữ liệu nhỏ:} \TBD\ (nếu Transformer
+	      kém hơn thì bản thân điều đó là một phát hiện về nhu cầu dữ liệu của
+	      kiến trúc attention thuần túy).
+	\item \textbf{Attention đóng góp gì:} \TBD\ (mức chênh BLEU/CIDEr khi tắt
+	      attention; đối chiếu bản đồ nhiệt).
+	\item \textbf{Đặt cạnh đồ án giữa kỳ:} Medical VQA (phân loại) và captioning
+	      (sinh chuỗi) là hai nhánh đầu ra của cùng meta-kiến trúc đa phương thức;
+	      điểm chung là khối fusion bằng attention, điểm khác là không gian đầu ra
+	      --- nhãn rời rạc so với chuỗi mở. \TBD\ (bổ sung sau khi có số liệu).
+\end{itemize}

@@ -1,0 +1,22 @@
+\RequirePackage{fix-cm}
+\documentclass[12pt,a4paper]{report}
+\input{config/format}
+% Compile: latexmk -pdf main  (pdflatex -> biber -> pdflatex x2)
+\begin{document}
+	% --- Frontmatter ---
+	\input{1_frontmatter/01_Coverpage}
+	\input{1_frontmatter/02_Declaration}
+	\input{1_frontmatter/03_Abstract}
+	\input{1_frontmatter/04_TableOfContents}
+	\input{1_frontmatter/05_ListOfFigures}
+	\input{1_frontmatter/06_ListOfTables}
+	\input{1_frontmatter/07_ListOfAbbreviations}
+	% --- Chapters ---
+	\input{2_chapters/1_Introduction}
+	\input{2_chapters/2_Background}
+	\input{2_chapters/3_Methods}
+	\input{2_chapters/4_Experiments}
+	\input{2_chapters/5_Conclusion}
+	% --- Backmatter ---
+	\input{3_backmatter/References}
+\end{document}

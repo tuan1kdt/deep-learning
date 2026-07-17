@@ -1,0 +1,104 @@
+\chapter{DỮ LIỆU VÀ PHƯƠNG PHÁP}
+\label{chap:methods}
+
+\section{Bộ dữ liệu Flickr8k}
+
+Flickr8k \autocite{hodosh2013framing} gồm 8.000 ảnh đời thường, mỗi ảnh được 5
+người mô tả độc lập bằng tiếng Anh. Đồ án dùng bản phân chia Karpathy
+\autocite{karpathy2015deep} có sẵn trên Hugging Face (\texttt{jxie/flickr8k}):
+6.000 ảnh huấn luyện, 1.000 kiểm định, 1.000 kiểm tra. Mỗi cặp (ảnh, 1 caption)
+là một mẫu huấn luyện, cho $6.000\times 5 = 30.000$ mẫu.
+
+\section{Tiền xử lý}
+
+\subsection{Văn bản}
+Caption được chuyển chữ thường, loại ký tự không phải chữ/số, tách theo khoảng
+trắng. Từ điển mức từ giữ các từ xuất hiện $\geq 5$ lần trong tập huấn luyện,
+cộng 4 token đặc biệt \texttt{<pad>}, \texttt{<bos>}, \texttt{<eos>},
+\texttt{<unk>}. Câu bị cắt ở 20 từ (độ phủ và tỷ lệ \texttt{<unk>} thực tế:
+\TBD\ --- điền sau khi build từ điển). Chọn mức từ thay vì BPE vì kho từ vựng
+Flickr8k nhỏ và mỗi token là một từ trọn vẹn, thuận tiện khi đọc bản đồ nhiệt
+attention.
+
+\subsection{Ảnh: trích đặc trưng một lần}
+Toàn bộ ảnh được đưa qua ResNet-50 \autocite{he2016resnet} huấn luyện sẵn trên
+ImageNet, đóng băng, cắt sau khối \texttt{layer4}: mỗi ảnh cho bản đồ đặc trưng
+$7\times 7\times 2048$, dàn phẳng thành 49 vùng $\times$ 2048 chiều, lưu
+\texttt{float16}. Quyết định \emph{tính trước một lần} này khiến mọi thí nghiệm
+sau đó chỉ huấn luyện decoder trên tensor có sẵn --- mỗi epoch tính bằng giây ---
+đổi lại không dùng được augmentation ảnh (nêu ở mục hạn chế).
+
+\section{Kiến trúc hai decoder}
+
+Cả hai decoder nhận cùng đầu vào: 49 vùng ảnh được chiếu tuyến tính
+$2048 \to d_{\text{model}} = 512$ (kèm LayerNorm + dropout), và chuỗi từ đã sinh.
+Cả hai đều tie trọng số embedding với tầng đầu ra. Khác biệt \emph{duy nhất} là
+cơ chế sinh chuỗi --- bảo đảm so sánh công bằng.
+
+\subsection{LSTM với attention Bahdanau}
+Một tầng \texttt{LSTMCell} ẩn 512 chiều, khởi tạo trạng thái từ trung bình 49
+vùng. Tại mỗi bước, attention cộng tính (công thức~\ref{eq:bahdanau}) dùng trạng
+thái ẩn bước trước để tính vector ngữ cảnh; đầu vào của cell là ghép nối
+[embedding từ trước; ngữ cảnh]. Biến thể ablation tắt attention thay ngữ cảnh
+bằng trung bình cố định của 49 vùng.
+
+\subsection{Transformer decoder tự cài đặt}
+Ba khối pre-norm, mỗi khối: masked self-attention (8 đầu) $\to$ cross-attention
+vào 49 vùng ảnh (8 đầu) $\to$ FFN 2048. Positional embedding học được; LayerNorm
+cuối trước tầng đầu ra. Lý do tự cài từng khối thay vì dùng
+\texttt{nn.TransformerDecoder}: lớp đóng hộp không trả ra trọng số
+cross-attention, trong khi bản đồ nhiệt ``từ nào nhìn vùng nào'' là phân tích
+định tính trung tâm của đồ án.
+
+\begin{table}[H]
+	\centering
+	\caption{Cấu hình hai decoder (số tham số chính xác: \TBD\ --- in từ code).}
+	\label{tab:architecture}
+	\begin{tabular}{lcc}
+		\hline
+		 & \textbf{LSTM+Bahdanau} & \textbf{Transformer} \\
+		\hline
+		Số tầng & 1 & 3 \\
+		$d_{\text{model}}$ & 512 & 512 \\
+		Attention & cộng tính, 1 đầu & tích vô hướng, 8 đầu \\
+		FFN & --- & 2048 \\
+		Dropout & 0,3 & 0,3 \\
+		Tie embedding--output & có & có \\
+		Số tham số & \TBD & \TBD \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Cấu hình huấn luyện}
+
+\begin{table}[H]
+	\centering
+	\caption{Siêu tham số huấn luyện (chung cho mọi run trừ khi ghi khác).}
+	\label{tab:hyperparams}
+	\begin{tabular}{ll}
+		\hline
+		Optimizer & AdamW, weight decay $0{,}01$ \\
+		Batch size & 128 \\
+		Learning rate & LSTM: $3\times10^{-4}$; Transformer: $10^{-4}$, warmup 2.000 bước \\
+		Lịch LR & cosine decay theo bước \\
+		Label smoothing & 0,1 \\
+		Gradient clipping & 5,0 \\
+		Số epoch tối đa & 25, early stopping theo val loss (patience 5) \\
+		Seed & 42 (cố định cho mọi run) \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Suy luận dùng greedy và beam search $B \in \{3, 5\}$ với chuẩn hóa độ dài.
+Giai đoạn SCST (mở rộng) khởi động từ checkpoint SFT tốt nhất, phần thưởng là
+CIDEr, baseline là điểm của câu giải mã greedy.
+
+\section{Môi trường thực nghiệm và tổ chức mã nguồn}
+
+Mã nguồn tổ chức thành package \texttt{final/} (PyTorch), mọi lựa chọn thí nghiệm
+đi qua một \texttt{Config} dataclass trung tâm --- đổi thí nghiệm là đổi cờ dòng
+lệnh, không sửa code. Kiểm thử đơn vị (pytest) khóa các bất biến: mặt nạ nhân quả
+không nhìn tương lai, trọng số attention có tổng bằng 1, encode/decode từ điển
+khứ hồi, greedy/beam dừng đúng ở \texttt{<eos>}. Phát triển và smoke test trên
+Mac (MPS); huấn luyện thật trên máy chủ từ xa GPU NVIDIA RTX PRO 4000 Blackwell
+24\,GB (PyTorch 2.11, CUDA 12.8) qua SSH, tiến trình chạy trong tmux.

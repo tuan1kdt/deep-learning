@@ -1,0 +1,53 @@
+\chapter{GIỚI THIỆU}
+\label{chap:intro}
+
+\section{Bài toán sinh mô tả ảnh}
+
+Sinh mô tả ảnh (image captioning) là bài toán nhận một bức ảnh và sinh ra một
+câu văn tự nhiên mô tả nội dung của ảnh. Khác với phân loại ảnh --- nơi đầu ra
+là một nhãn rời rạc --- đầu ra ở đây là một \emph{chuỗi} từ có cấu trúc ngữ pháp,
+đòi hỏi mô hình vừa ``nhìn hiểu'' ảnh (thị giác) vừa ``nói được'' (ngôn ngữ).
+Bài toán vì vậy là ví dụ tiêu biểu của học đa phương thức (multimodal learning),
+nơi hai phương thức thị giác và ngôn ngữ phải được kết nối trong cùng một mô hình
+\autocite{vinyals2015show,xu2015show}.
+
+\section{Vị trí đề tài trong sơ đồ kiến trúc đa phương thức của môn học}
+
+Sơ đồ kiến trúc đa phương thức tổng quát mà giảng viên giới thiệu gồm: các bộ
+mã hóa riêng cho từng phương thức (image encoder, text encoder), một khối
+\emph{hợp nhất} (fusion) kết nối các phương thức, và phần đầu ra rẽ thành hai
+nhánh --- \emph{phân loại} (classification head) hoặc \emph{sinh chuỗi}
+(generation head).
+
+Ở đồ án giữa kỳ, tôi đã đi nhánh phân loại với bài toán Medical VQA: ảnh và câu
+hỏi được mã hóa, hợp nhất, rồi phân loại ra câu trả lời. Đồ án cuối kỳ này đi
+nốt nhánh còn lại: khối fusion chính là \emph{cross-attention} giữa chuỗi từ đang
+sinh và 49 vùng đặc trưng của ảnh, còn đầu ra là decoder tự hồi quy sinh từng từ.
+Hai đồ án ghép lại phủ trọn sơ đồ: cùng một meta-kiến trúc, chỉ thay đầu ra.
+
+\section{Mục tiêu và câu hỏi nghiên cứu}
+
+Đồ án đặt bốn câu hỏi, tương ứng bốn trục thí nghiệm:
+\begin{enumerate}
+	\item Trên tập dữ liệu nhỏ (Flickr8k), decoder \textbf{LSTM+attention} hay
+	      \textbf{Transformer} học tốt hơn? Đường cong học của chúng khác nhau ra sao?
+	\item Cơ chế \textbf{attention} đóng góp bao nhiêu vào chất lượng mô tả
+	      (so sánh LSTM có/không attention)?
+	\item Chiến lược giải mã \textbf{greedy} so với \textbf{beam search} thay đổi
+	      chất lượng thế nào?
+	\item (Mở rộng) Tinh chỉnh bằng học tăng cường \textbf{SCST} sau huấn luyện
+	      teacher forcing được gì và mất gì?
+\end{enumerate}
+
+Ràng buộc tự đặt: \emph{tự cài đặt} toàn bộ decoder (không dùng
+\texttt{nn.TransformerDecoder} đóng hộp, không dùng mô hình captioning huấn luyện
+sẵn như BLIP/GIT), để hiểu và trình bày được từng thành phần kiến trúc.
+
+\section{Đóng góp và cấu trúc báo cáo}
+
+Báo cáo gồm 5 chương. Chương~\ref{chap:background} trình bày cơ sở lý thuyết:
+khung encoder--decoder, các dạng attention, teacher forcing và SCST.
+Chương~\ref{chap:methods} mô tả dữ liệu Flickr8k, tiền xử lý, và kiến trúc hai
+decoder cùng cấu hình huấn luyện. Chương~\ref{chap:experiments} trình bày kết quả
+định lượng (BLEU/CIDEr), đường cong học, và phân tích định tính qua bản đồ nhiệt
+attention. Chương~\ref{chap:conclusion} kết luận và nêu hạn chế.

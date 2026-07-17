@@ -1,0 +1,88 @@
+\chapter{CƠ SỞ LÝ THUYẾT}
+\label{chap:background}
+
+\section{Khung encoder--decoder cho bài toán sinh chuỗi}
+
+Kiến trúc encoder--decoder tách bài toán thành hai phần: encoder nén đầu vào
+(ảnh) thành biểu diễn trung gian, decoder sinh chuỗi đầu ra (câu mô tả) một cách
+tự hồi quy --- từ thứ $t$ được sinh dựa trên ảnh và các từ $1..t{-}1$ đã sinh:
+\begin{equation}
+	p(y \mid I) = \prod_{t=1}^{T} p\!\left(y_t \mid y_{<t},\, I\right).
+\end{equation}
+Với sinh mô tả ảnh, encoder thường là CNN huấn luyện sẵn trên ImageNet
+\autocite{he2016resnet}; decoder là mô hình ngôn ngữ có điều kiện. Công trình
+\emph{Show and Tell} \autocite{vinyals2015show} nén cả ảnh vào một vector duy nhất
+--- nút thắt cổ chai thông tin mà attention sau này giải quyết.
+
+\section{Cơ chế attention}
+
+\subsection{Attention cộng tính Bahdanau}
+
+Thay vì một vector ảnh cố định, encoder giữ lại $R$ vùng đặc trưng
+$\{f_1,\dots,f_R\}$ (ở đây $R=49$ vùng của lưới $7\times 7$). Tại mỗi bước sinh,
+decoder với trạng thái ẩn $h$ tính điểm cho từng vùng bằng attention cộng tính
+\autocite{bahdanau2015neural}:
+\begin{equation}
+	e_i = v^\top \tanh\!\left(W_h h + W_f f_i\right), \qquad
+	\alpha = \operatorname{softmax}(e), \qquad
+	c = \sum_{i=1}^{R} \alpha_i f_i,
+	\label{eq:bahdanau}
+\end{equation}
+rồi dùng vector ngữ cảnh $c$ (thay đổi theo từng bước) để sinh từ tiếp theo.
+\emph{Show, Attend and Tell} \autocite{xu2015show} áp dụng đúng cơ chế này cho
+captioning; trọng số $\alpha$ còn cho ta bản đồ nhiệt ``từ nào nhìn vùng ảnh nào''
+--- công cụ phân tích định tính chính của báo cáo.
+
+\subsection{Self-attention và cross-attention trong Transformer}
+
+Transformer \autocite{vaswani2017attention} thay thế hồi quy bằng attention
+tích vô hướng có tỷ lệ trên toàn chuỗi:
+\begin{equation}
+	\operatorname{Attention}(Q,K,V)
+	= \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V.
+\end{equation}
+Trong decoder cho captioning, mỗi khối gồm ba tầng con: (i) \emph{masked
+self-attention} --- chuỗi từ tự nhìn phần quá khứ của chính nó (mặt nạ nhân quả
+chặn nhìn tương lai); (ii) \emph{cross-attention} --- truy vấn $Q$ đến từ chuỗi từ,
+khóa/giá trị $K,V$ đến từ 49 vùng ảnh, chính là khối \emph{fusion} trong sơ đồ
+đa phương thức; (iii) mạng FFN theo vị trí. Kiến trúc pre-norm (LayerNorm trước
+attention) được chọn vì ổn định hơn khi huấn luyện từ đầu trên dữ liệu nhỏ.
+
+\section{Huấn luyện teacher forcing và các kỹ thuật ổn định}
+
+Huấn luyện chuẩn (gọi là SFT trong báo cáo này) dùng \emph{teacher forcing}:
+tại bước $t$, mô hình nhận từ \emph{thật} $y_{t-1}$ làm đầu vào thay vì từ nó
+vừa sinh, và cực tiểu hóa cross-entropy trung bình trên các vị trí không phải
+đệm. Các kỹ thuật ổn định được dùng: label smoothing $0{,}1$
+\autocite{szegedy2016rethinking}, tie trọng số giữa ma trận embedding và tầng
+đầu ra \autocite{press2017using}, gradient clipping, và với Transformer là
+warmup + cosine decay cho learning rate.
+
+\section{Giải mã: greedy và beam search}
+
+Khi suy luận, mô hình phải tự sinh: greedy chọn từ có xác suất cao nhất mỗi bước
+--- nhanh nhưng dễ mắc kẹt ở lựa chọn cục bộ; beam search giữ $B$ giả thuyết tốt
+nhất song song, chấm điểm bằng log-xác-suất chuẩn hóa theo độ dài để không thiên
+vị câu ngắn.
+
+\section{Tinh chỉnh bằng học tăng cường: SCST}
+
+Teacher forcing có hai điểm lệch: (i) \emph{exposure bias} --- lúc huấn luyện luôn
+thấy tiền tố thật, lúc suy luận phải tự nối tiếp lỗi của chính mình; (ii) hàm mất
+mát cross-entropy không trùng với thước đo đánh giá (BLEU/CIDEr).
+SCST \autocite{rennie2017self} xử lý cả hai bằng REINFORCE với baseline tự phê
+bình: lấy mẫu câu $y^s$, giải mã greedy câu $\hat{y}$, và cập nhật
+\begin{equation}
+	\nabla_\theta L \approx -\left(r(y^s) - r(\hat{y})\right)
+	\nabla_\theta \log p_\theta(y^s),
+\end{equation}
+với $r$ là điểm CIDEr. Câu lấy mẫu tốt hơn greedy thì được khuếch đại, kém hơn
+thì bị nén --- không cần huấn luyện mạng giá trị riêng.
+
+\section{Thước đo đánh giá}
+
+\textbf{BLEU-n} \autocite{papineni2002bleu} đo độ trùng n-gram (có hình phạt câu
+ngắn) giữa câu sinh và 5 câu tham chiếu. \textbf{CIDEr} \autocite{vedantam2015cider}
+đánh trọng số TF-IDF cho n-gram --- n-gram hiếm, giàu thông tin được thưởng cao
+hơn --- và là thước đo tương quan tốt nhất với đánh giá của con người trong các
+thước đo tự động phổ biến cho captioning.

@@ -1,0 +1,34 @@
+\chapter{KẾT LUẬN}
+\label{chap:conclusion}
+
+\section{Kết quả đạt được}
+
+Đồ án đã xây dựng trọn vẹn một pipeline sinh mô tả ảnh trên Flickr8k theo khung
+encoder--decoder: trích đặc trưng ResNet-50 tính trước, hai decoder tự cài đặt
+(LSTM+Bahdanau và Transformer pre-norm), huấn luyện teacher forcing với các kỹ
+thuật ổn định hiện đại, đánh giá BLEU/CIDEr, và trực quan hóa attention.
+Kết luận chính từ bốn trục thí nghiệm: \TBD\ (điền sau khi có kết quả).
+
+Cùng với đồ án giữa kỳ (Medical VQA), hai nhánh classification và generation
+của sơ đồ kiến trúc đa phương thức của môn học đã được hiện thực hóa và đối
+chiếu trên cùng một khung tư duy.
+
+\section{Hạn chế}
+
+\begin{itemize}
+	\item \textbf{Không augmentation ảnh:} do đặc trưng được tính trước một lần
+	      trên encoder đóng băng --- đánh đổi có chủ đích để đổi lấy tốc độ
+	      thí nghiệm.
+	\item \textbf{Không tinh chỉnh encoder:} ResNet-50 giữ nguyên trọng số
+	      ImageNet; đặc trưng có thể chưa tối ưu cho miền mô tả ảnh.
+	\item \textbf{Dữ liệu nhỏ:} 8k ảnh là quy mô học thuật; kết luận về so sánh
+	      kiến trúc không nhất thiết ngoại suy được sang quy mô lớn.
+	\item \textbf{Từ điển mức từ:} từ hiếm bị gộp về \texttt{<unk>}, mô hình
+	      không thể sinh từ ngoài từ điển.
+\end{itemize}
+
+\section{Hướng phát triển}
+
+Tinh chỉnh encoder ở giai đoạn cuối; thay từ điển mức từ bằng BPE; mở rộng SCST
+với các phần thưởng tổ hợp; và áp dụng cùng khung so sánh lên bộ dữ liệu lớn hơn
+(MS COCO) để kiểm chứng xu hướng LSTM/Transformer theo quy mô dữ liệu.

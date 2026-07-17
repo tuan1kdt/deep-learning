@@ -1,0 +1,26 @@
+\chapter*{TÓM TẮT}
+\addcontentsline{toc}{chapter}{TÓM TẮT}
+
+Báo cáo này nghiên cứu bài toán \emph{sinh mô tả ảnh} (image captioning) --- nhánh
+\emph{sinh} (generation) trong sơ đồ kiến trúc đa phương thức tổng quát của môn học ---
+trên bộ dữ liệu Flickr8k gồm 8.000 ảnh, mỗi ảnh có 5 câu mô tả tiếng Anh.
+Hệ thống theo khung encoder--decoder: ảnh được mã hóa bằng ResNet-50 đóng băng
+thành 49 vùng đặc trưng $7\times 7\times 2048$ (tính trước một lần), sau đó hai họ
+decoder được huấn luyện và so sánh trong cùng điều kiện: (i) LSTM với attention
+cộng tính Bahdanau theo tinh thần \emph{Show, Attend and Tell}, và (ii) Transformer
+decoder tự cài đặt từng khối (masked self-attention, cross-attention, FFN, pre-norm).
+
+Bốn trục thí nghiệm được khảo sát: LSTM+attention so với Transformer; đóng góp
+của cơ chế attention (ablation tắt attention); giải mã greedy so với beam search;
+và (mở rộng) tinh chỉnh bằng học tăng cường SCST tối ưu trực tiếp CIDEr sau khi
+huấn luyện teacher forcing. Chất lượng được đo bằng BLEU-1..4 và CIDEr trên tập
+kiểm tra 1.000 ảnh, kèm phân tích định tính qua bản đồ nhiệt attention theo từng
+từ được sinh ra.
+
+Kết quả chính: \TBD\ (bảng số liệu và phân tích sẽ được hoàn thiện sau khi các
+thí nghiệm huấn luyện kết thúc). Cùng với đồ án giữa kỳ (Medical VQA --- nhánh
+phân loại), đồ án này khép lại bức tranh hai nhánh classification/generation
+của cùng một meta-kiến trúc đa phương thức.
+
+\textbf{Từ khóa:} image captioning, attention, LSTM, Transformer, Flickr8k, SCST.
+\clearpage
