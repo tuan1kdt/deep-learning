@@ -192,6 +192,10 @@ def main() -> None:
     parser.add_argument("--no-attention", action="store_true",
                         help="LSTM dùng mean-pool thay attention (ablation #2)")
     parser.add_argument("--run-name", default="")
+    parser.add_argument("--seed", type=int, default=42,
+                        help="đổi seed cho thí nghiệm mean±std đa seed")
+    parser.add_argument("--warmup", type=int, default=-1,
+                        help="số bước warmup LR (-1 = auto theo decoder)")
     parser.add_argument("--smoke", action="store_true",
                         help="512 mẫu + 2 epoch: kiểm tra pipeline end-to-end")
     args = parser.parse_args()
@@ -201,7 +205,7 @@ def main() -> None:
     run_name = args.run_name or (f"{default_name}_smoke" if args.smoke
                                  else default_name)
     cfg = Config(decoder=args.decoder, use_attention=use_attention,
-                 run_name=run_name)
+                 run_name=run_name, seed=args.seed, warmup_steps=args.warmup)
     if args.smoke:
         cfg.batch_size = 64
         cfg.num_workers = 0

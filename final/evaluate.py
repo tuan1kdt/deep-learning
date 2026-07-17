@@ -13,6 +13,7 @@ from pathlib import Path
 import torch
 from nltk.translate.bleu_score import SmoothingFunction, corpus_bleu
 from pycocoevalcap.cider.cider import Cider
+from pycocoevalcap.rouge.rouge import Rouge
 
 from final.config import Config, pick_device
 from final.data.dataset import load_eval_data
@@ -56,7 +57,8 @@ def compute_metrics(hyps: list[str], refs: list[list[str]]) -> dict:
     gts = {i: [" ".join(toks) for toks in group] for i, group in enumerate(ref_tok)}
     res = {i: [" ".join(hyp_tok[i])] for i in range(len(hyp_tok))}
     cider_score, _ = Cider().compute_score(gts, res)
-    return {**bleu, "cider": float(cider_score)}
+    rouge_score, _ = Rouge().compute_score(gts, res)
+    return {**bleu, "rouge_l": float(rouge_score), "cider": float(cider_score)}
 
 
 def generate(model, feats, mode: str, cfg: Config, vocab: Vocab,
@@ -96,15 +98,16 @@ def main() -> None:
 
     out_dir = Path(cfg.output_dir) / cfg.run_name
     out_dir.mkdir(parents=True, exist_ok=True)
-    rows = ["| mode | BLEU-1 | BLEU-2 | BLEU-3 | BLEU-4 | CIDEr |",
-            "|---|---|---|---|---|---|"]
+    rows = ["| mode | BLEU-1 | BLEU-2 | BLEU-3 | BLEU-4 | ROUGE-L | CIDEr |",
+            "|---|---|---|---|---|---|---|"]
     for mode in args.modes.split(","):
         hyps = generate(model, feats, mode, cfg, vocab, device)
         (out_dir / f"hyps_{mode}.json").write_text(
             json.dumps(hyps, ensure_ascii=False, indent=2))
         m = compute_metrics(hyps, refs)
         rows.append(f"| {mode} | {m['bleu1']:.3f} | {m['bleu2']:.3f} "
-                    f"| {m['bleu3']:.3f} | {m['bleu4']:.3f} | {m['cider']:.3f} |")
+                    f"| {m['bleu3']:.3f} | {m['bleu4']:.3f} "
+                    f"| {m['rouge_l']:.3f} | {m['cider']:.3f} |")
         print(rows[-1])
     table = "\n".join(rows)
     (out_dir / "eval.md").write_text(f"# Eval {cfg.run_name}\n\n{table}\n")

@@ -23,7 +23,7 @@ def test_hyp_trung_khop_diem_cao_hon_hyp_sai():
 
 def test_metric_du_key_va_trong_khoang():
     m = compute_metrics(["a dog runs"], [["a dog runs fast today"]])
-    for k in ("bleu1", "bleu2", "bleu3", "bleu4", "cider"):
+    for k in ("bleu1", "bleu2", "bleu3", "bleu4", "rouge_l", "cider"):
         assert k in m and m[k] >= 0.0
     assert m["bleu1"] <= 1.0
 
