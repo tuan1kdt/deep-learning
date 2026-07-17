@@ -7,7 +7,28 @@
 encoder--decoder: trích đặc trưng ResNet-50 tính trước, hai decoder tự cài đặt
 (LSTM+Bahdanau và Transformer pre-norm), huấn luyện teacher forcing với các kỹ
 thuật ổn định hiện đại, đánh giá BLEU/CIDEr, và trực quan hóa attention.
-Kết luận chính từ bốn trục thí nghiệm: \TBD\ (điền sau khi có kết quả).
+Bốn trục thí nghiệm cho bốn kết luận chính:
+
+\begin{enumerate}
+	\item \textbf{Kiến trúc:} LSTM+attention và Transformer gần như hòa trên
+	      30.000 caption --- BLEU-4 beam tốt nhất cùng đạt 0,219, Transformer
+	      nhỉnh ở CIDEr (0,587 so với 0,573) nhưng tốn 2,3$\times$ tham số
+	      (14,97 so với 6,55 triệu) và cần $\approx$8,5 epoch warmup. Ở quy mô
+	      dữ liệu này, thiên kiến quy nạp tuần tự của LSTM vẫn bù được gần trọn
+	      lợi thế của attention đa đầu.
+	\item \textbf{Attention:} là thành phần đáng giá nhất trên mỗi tham số ---
+	      tắt attention làm CIDEr greedy giảm 10,5\% (0,536 $\to$ 0,485), mức
+	      chênh lớn hơn cả khoảng cách giữa hai họ kiến trúc; bản đồ nhiệt xác
+	      nhận từ nội dung thực sự bám vùng ảnh tương ứng.
+	\item \textbf{Giải mã:} beam search thắng greedy ở mọi mô hình, biên lớn
+	      nhất ở CIDEr ($+0{,}037$ đến $+0{,}055$) trong khi BLEU-1 gần như
+	      đứng yên; beam 3 đã đủ, beam 5 không thêm đáng kể. BLEU-4 21,9--22,1
+	      ngang mốc \emph{Show, Attend and Tell} trên cùng bộ dữ liệu (21,3).
+	\item \textbf{SCST:} nâng đúng chỗ cơ chế nhắm tới --- CIDEr greedy
+	      $+0{,}010$ và BLEU-1 cao nhất toàn bảng (0,630) --- nhưng biên gần
+	      như biến mất khi đã dùng beam search; với hệ có sẵn beam, RL tinh
+	      chỉnh là khoản đầu tư lợi suất thấp trên bộ dữ liệu này.
+\end{enumerate}
 
 Cùng với đồ án giữa kỳ (Medical VQA), hai nhánh classification và generation
 của sơ đồ kiến trúc đa phương thức của môn học đã được hiện thực hóa và đối

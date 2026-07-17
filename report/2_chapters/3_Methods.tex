@@ -243,8 +243,9 @@ kéo checkpoint và output về máy dev bằng \texttt{rsync}.
 Toàn bộ package được lập kế hoạch trước thành 13 task tuần tự (từ scaffold
 \texttt{Config} đến SCST), mỗi task viết theo chu trình \emph{test trước, code
 sau}: định nghĩa hợp đồng đầu vào/ra của module, viết unit test cho hợp đồng
-đó, thấy test đỏ, rồi mới cài đặt tới khi test xanh. Tổng cộng 44 unit test
-được viết qua quá trình này (bảng dưới liệt kê theo nhóm), phủ từ tokenize/
+đó, thấy test đỏ, rồi mới cài đặt tới khi test xanh. Tổng cộng 45 unit test
+được viết qua quá trình này (phụ lục~\ref{app:tests} liệt kê đầy đủ theo nhóm),
+phủ từ tokenize/
 vocab, hình dạng tensor của từng decoder, mặt nạ nhân quả, đến beam search
 dừng đúng \texttt{<eos>}. Mỗi task, sau khi code xanh, còn qua một bước
 \emph{review độc lập} (một phiên riêng đọc lại diff so với hợp đồng đã định

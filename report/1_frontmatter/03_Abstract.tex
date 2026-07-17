@@ -17,8 +17,14 @@ huấn luyện teacher forcing. Chất lượng được đo bằng BLEU-1..4 v�
 kiểm tra 1.000 ảnh, kèm phân tích định tính qua bản đồ nhiệt attention theo từng
 từ được sinh ra.
 
-Kết quả chính: \TBD\ (bảng số liệu và phân tích sẽ được hoàn thiện sau khi các
-thí nghiệm huấn luyện kết thúc). Cùng với đồ án giữa kỳ (Medical VQA --- nhánh
+Kết quả chính: hai kiến trúc gần như ngang nhau trên 30.000 caption --- BLEU-4
+beam tốt nhất cùng đạt 0,219, Transformer nhỉnh ở CIDEr (0,587 so với 0,573)
+nhưng tốn 2,3 lần tham số; BLEU-4 21,9--22,1 ngang mốc \emph{Show, Attend and
+Tell} trên cùng bộ dữ liệu (21,3). Attention là thành phần đáng giá nhất: tắt nó
+làm CIDEr greedy giảm 10,5\% (0,536 xuống 0,485), lớn hơn cả khác biệt giữa hai
+kiến trúc. Beam search luôn vượt greedy với biên lớn nhất ở CIDEr, còn SCST nâng
+CIDEr greedy từ 0,536 lên 0,546 nhưng gần như không thêm gì khi đã dùng beam.
+Cùng với đồ án giữa kỳ (Medical VQA --- nhánh
 phân loại), đồ án này khép lại bức tranh hai nhánh classification/generation
 của cùng một meta-kiến trúc đa phương thức.
 

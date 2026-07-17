@@ -13,3 +13,6 @@
 *.synctex.gz
 *.toc
 main.pdf
+
+# Hình kết quả nhúng vào báo cáo — phải commit để report compile standalone
+!figs/results/*.png
