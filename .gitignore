@@ -37,3 +37,11 @@ midterm_medvqa/
 
 # Corpus Tatoeba en-vi (day6) — script tự tải lại
 /data/tatoeba_envi/
+
+# Đồ án cuối kỳ (final/) — artifact tải/sinh lại bằng download.py, features.py, train.py
+final/data/flickr8k/
+final/data/features_*.pt
+final/data/captions_*.json
+final/data/vocab.json
+final/checkpoints/
+final/outputs/
