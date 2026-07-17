@@ -49,6 +49,24 @@ def test_beam_1_bang_greedy_tren_model_that():
     assert beam_ids == greedy_ids[0]
 
 
+def test_decode_khoi_phuc_trang_thai_train():
+    cfg = Config(decoder="lstm", d_model=16, attn_dim=8, dropout=0.0,
+                 feat_dim=8, max_words=6)
+    model = build_model(cfg, vocab_size=V)
+    feats = torch.randn(1, 49, 8)
+
+    model.train()
+    greedy_decode(model, feats, cfg.max_len)
+    assert model.training is True                       # train được khôi phục
+
+    beam_search(model, feats, beam_size=2, max_len=cfg.max_len)
+    assert model.training is True
+
+    model.eval()
+    greedy_decode(model, feats, cfg.max_len)
+    assert model.training is False                      # eval giữ nguyên
+
+
 def test_build_model_transformer_va_dem_tham_so():
     cfg = Config(decoder="transformer", d_model=16, num_layers=1, num_heads=2,
                  ffn_dim=32, dropout=0.0, feat_dim=8, max_words=6)

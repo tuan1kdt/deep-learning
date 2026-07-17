@@ -21,7 +21,11 @@ def _trim(ids: list[int]) -> list[int]:
 
 @torch.no_grad()
 def greedy_decode(model, feats, max_len: int):
-    """feats (B,49,2048) → (list B chuỗi id đã trim, attn (B,T_sinh,R))."""
+    """feats (B,49,2048) → (list B chuỗi id đã trim, attn (B,T_sinh,R)).
+
+    Hàng t của attn ứng với token đã cắt thứ t; khi gặp EOS attn có 1 hàng
+    thừa cuối (bước sinh EOS) — caller cắt `attn[:, :len(seq)]`."""
+    was_training = model.training
     model.eval()
     B = feats.size(0)
     cap = torch.full((B, 1), BOS_ID, dtype=torch.long, device=feats.device)
@@ -32,6 +36,7 @@ def greedy_decode(model, feats, max_len: int):
         if (cap == EOS_ID).any(dim=1).all():
             break
     seqs = [_trim(row.tolist()) for row in cap]
+    model.train(was_training)
     return seqs, attn
 
 
@@ -39,6 +44,7 @@ def greedy_decode(model, feats, max_len: int):
 def beam_search(model, feats_one, beam_size: int, max_len: int) -> list[int]:
     """Beam search cho MỘT ảnh, chấm theo log-prob trung bình mỗi token
     (length normalization — không phạt câu dài một cách mù quáng)."""
+    was_training = model.training
     model.eval()
     device = feats_one.device
     beams = [([BOS_ID], 0.0)]              # (chuỗi id, tổng log-prob)
@@ -61,4 +67,5 @@ def beam_search(model, feats_one, beam_size: int, max_len: int) -> list[int]:
     finished += beams
     # điểm = log-prob trung bình trên số token đã sinh (không tính BOS)
     best = max(finished, key=lambda b: b[1] / max(1, len(b[0]) - 1))
+    model.train(was_training)
     return _trim(best[0])
