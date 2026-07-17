@@ -26,6 +26,14 @@ def load_model_from_checkpoint(path, device):
     saved = dict(ckpt["config"])
     saved["beam_sizes"] = tuple(saved.get("beam_sizes", (3, 5)))
     cfg = Config(**saved)
+    # Checkpoint có thể được rsync từ máy khác (vd. trainbox) sang máy này —
+    # các đường dẫn tuyệt đối (vocab_path, data_root, ...) đã bake vào lúc
+    # train chỉ đúng trên máy đó. Chỉ giữ lại siêu tham số (kiến trúc, lr,
+    # ...) từ checkpoint; đường dẫn luôn lấy theo máy hiện tại (FINAL_DIR).
+    fresh = Config()
+    for field in ("vocab_path", "data_root", "dataset_dir",
+                  "output_dir", "checkpoint_dir"):
+        setattr(cfg, field, getattr(fresh, field))
     vocab = Vocab.load(cfg.vocab_path)
     assert len(vocab) == ckpt["vocab_size"], "vocab trên đĩa khác lúc train"
     model = build_model(cfg, len(vocab)).to(device)

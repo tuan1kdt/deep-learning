@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 # Neo mọi đường dẫn theo thư mục final/ để chạy được từ bất kỳ cwd nào
-# (local lẫn Colab) — cùng lý do với MIDTERM_DIR bên midterm/.
+# (local lẫn máy train remote/trainbox) — cùng lý do với MIDTERM_DIR bên midterm/.
 FINAL_DIR = Path(__file__).resolve().parent
 
 # LR/warmup mặc định khác nhau theo họ decoder: Transformer trên data nhỏ
@@ -86,7 +86,7 @@ class Config:
 
 
 def pick_device():
-    """cuda (Colab GPU) → mps (Mac) → cpu, đúng thứ tự ưu tiên như midterm."""
+    """cuda (máy train remote) → mps (Mac) → cpu, đúng thứ tự ưu tiên như midterm."""
     import torch
 
     if torch.cuda.is_available():

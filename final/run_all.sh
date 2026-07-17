@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Cho phép gọi script từ bất kỳ cwd nào (mọi lệnh bên dưới đều dùng đường
+# dẫn tương đối final/...) — chuyển về thư mục gốc repo trước tiên.
+cd "$(dirname "$0")/.."
+
 # PY có thể override: PY=~/work/.venv/bin/python ./final/run_all.sh
 PY="${PY:-.venv/bin/python}"
 
@@ -24,16 +28,25 @@ CKPT_LSTM="${CKPT_DIR}/${RUN_LSTM}.pt"
 CKPT_TRANSFORMER="${CKPT_DIR}/${RUN_TRANSFORMER}.pt"
 CKPT_LSTM_NOATTN="${CKPT_DIR}/${RUN_LSTM_NOATTN}.pt"
 
+HIST_LSTM="final/outputs/${RUN_LSTM}/history.json"
+HIST_TRANSFORMER="final/outputs/${RUN_TRANSFORMER}/history.json"
+HIST_LSTM_NOATTN="final/outputs/${RUN_LSTM_NOATTN}/history.json"
+
 step() {
     echo
     echo "==> $1"
 }
 
 train_step() {
+    # train.py chỉ ghi checkpoint từ epoch 1 (mỗi lần val loss cải thiện) —
+    # nếu chỉ guard theo checkpoint, một run bị ngắt giữa chừng (mất SSH...)
+    # sẽ bị coi là đã xong khi chạy lại. history.json chỉ được ghi ở cuối
+    # cùng lúc train() kết thúc thành công, nên guard theo CẢ HAI file.
     local ckpt="$1"
-    shift
-    if [ -f "$ckpt" ]; then
-        echo "  bỏ qua, đã có checkpoint: $ckpt"
+    local hist="$2"
+    shift 2
+    if [ -f "$ckpt" ] && [ -f "$hist" ]; then
+        echo "  bỏ qua, đã có checkpoint + history: $ckpt , $hist"
     else
         "$PY" -m final.train "$@"
     fi
@@ -49,13 +62,13 @@ step "3. Precompute feature ResNet-50"
 "$PY" -m final.data.features
 
 step "4. Train LSTM + attention (run: ${RUN_LSTM})"
-train_step "$CKPT_LSTM" --decoder lstm $SMOKE_FLAG
+train_step "$CKPT_LSTM" "$HIST_LSTM" --decoder lstm $SMOKE_FLAG
 
 step "5. Train Transformer (run: ${RUN_TRANSFORMER})"
-train_step "$CKPT_TRANSFORMER" --decoder transformer $SMOKE_FLAG
+train_step "$CKPT_TRANSFORMER" "$HIST_TRANSFORMER" --decoder transformer $SMOKE_FLAG
 
 step "6. Train LSTM không attention — ablation (run: ${RUN_LSTM_NOATTN})"
-train_step "$CKPT_LSTM_NOATTN" --decoder lstm --no-attention $SMOKE_FLAG
+train_step "$CKPT_LSTM_NOATTN" "$HIST_LSTM_NOATTN" --decoder lstm --no-attention $SMOKE_FLAG
 
 step "7. Evaluate ${RUN_LSTM} (greedy, beam3, beam5)"
 "$PY" -m final.evaluate --checkpoint "$CKPT_LSTM" --modes greedy,beam3,beam5 ${EVAL_LIMIT[@]+"${EVAL_LIMIT[@]}"}
