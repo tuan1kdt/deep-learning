@@ -16,7 +16,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 
 from final.config import pick_device
 from final.data.dataset import load_eval_data
@@ -79,7 +78,8 @@ def main() -> None:
     if args.smoke:
         feats, refs = feats[:256], refs[:256]
         args.epochs = 1
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
+                                  weight_decay=cfg.weight_decay)
 
     run_name = f"{cfg.run_name}_scst"
     ckpt_path = Path(cfg.checkpoint_dir) / f"{run_name}.pt"
