@@ -82,6 +82,93 @@ Nhận xét: \TBD\ (3--4 ca thành công, 2--3 ca thất bại; attention có b�
 vùng chứa danh từ/động từ không; khác biệt giữa attention một đầu của LSTM và
 đa đầu của Transformer).
 
+\section{Phát hiện trong quá trình phát triển: thang khởi tạo embedding khi tie weight}
+\label{sec:embedding-init}
+
+Mục này ghi lại một lỗi thực tế gặp phải trong quá trình phát triển và cách xử
+lý --- không phải kết quả thí nghiệm chính, nhưng là phát hiện có giá trị
+phương pháp luận: so sánh công bằng hai kiến trúc đòi hỏi kiểm soát cả những
+chi tiết ``ngầm định'' như thang khởi tạo tham số, không chỉ kiến trúc trên
+giấy.
+
+\subsection{Triệu chứng: cross-entropy ban đầu bất thường}
+
+Trong lần \emph{smoke run} đầu tiên (512 mẫu, 2 epoch, trước khi có bất kỳ
+bước huấn luyện nào tác động), cross-entropy đo ở batch đầu tiên của hai
+decoder lệch nhau rất xa: LSTM+Bahdanau khoảng \textbf{13,0}, trong khi
+Transformer khoảng \textbf{267,6}. Với $V = 2.539$ và nhãn được làm mượt (label
+smoothing $0{,}1$), cross-entropy của một mô hình \emph{chưa học gì} --- tương
+đương đoán gần như đều trên $V$ lớp --- được kỳ vọng xấp xỉ
+\begin{equation}
+	\text{CE}_{\text{kỳ vọng}} \approx \ln V + \text{(hiệu chỉnh nhỏ do
+	smoothing)} \approx \ln(2.539) \approx 7{,}84 \;\Rightarrow\; \approx 7{,}9.
+\end{equation}
+Cả hai con số quan sát được (13,0 và 267,6) đều cao hơn hẳn mức kỳ vọng này,
+và mức chênh giữa hai kiến trúc (LSTM lệch nhẹ, Transformer lệch gần 34 lần)
+cho thấy nguyên nhân không phải ngẫu nhiên mà nằm ở một khác biệt hệ thống
+giữa hai cách cài đặt.
+
+\subsection{Nguyên nhân: weight tying nhân cái khởi tạo mặc định lên logits}
+
+Cả hai decoder tie trọng số embedding với tầng đầu ra
+(\S\ref{sec:decoder-detail}): $\text{logits} = h\,E^\top$, với $E \in
+\mathbb{R}^{V\times D}$ là chính ma trận embedding. \texttt{torch.nn.Embedding}
+mặc định khởi tạo $E \sim \mathcal{N}(0,1)$ --- một lựa chọn hợp lý \emph{nếu}
+embedding chỉ dùng để tra cứu, nhưng có hại khi $E$ đồng thời là ma trận chiếu
+ra logits.
+
+Với Transformer, kiến trúc pre-norm đưa $h$ qua $\text{LN}_{\text{final}}$
+ngay trước khi nhân với $E^\top$ (công thức cuối
+mục~\ref{sec:decoder-detail}). LayerNorm chuẩn hoá mỗi vector $h$ về trung
+bình 0, phương sai 1 trên $D$ chiều, tức mỗi thành phần $h_j \sim
+\mathcal{O}(1)$. Với $E$ khởi tạo $\mathcal{N}(0,1)$, mỗi thành phần $E_{i,j}$
+cũng $\mathcal{O}(1)$ và độc lập với $h$, nên với mỗi từ $i$:
+\begin{align}
+	\text{Var}(\text{logit}_i) &= \text{Var}\Big(\sum_{j=1}^{D} h_j E_{i,j}\Big)
+	\approx D \cdot \text{Var}(h_j)\cdot\text{Var}(E_{i,j}) \approx D, \\
+	\text{std}(\text{logit}_i) &\approx \sqrt{D} = \sqrt{512} \approx 22{,}6.
+\end{align}
+Logits có độ lệch chuẩn $\approx 22,6$ thay vì $\mathcal{O}(1)$ khiến phân phối
+softmax gần như one-hot \emph{ngẫu nhiên} (không phải one-hot đúng nhãn) ---
+cross-entropy trung bình bùng nổ, đúng như quan sát $267,6 \gg 7,9$. LSTM ít bị
+ảnh hưởng hơn nhiều vì $h_t$ ở đây là trạng thái ẩn của \texttt{LSTMCell}, đi
+qua các cổng sigmoid và $\tanh$ --- biên độ mỗi thành phần bị nén về khoảng
+$(-1,1)$ với phương sai thực tế nhỏ hơn 1 khá nhiều (không có LayerNorm chuẩn
+hoá về đúng phương sai 1 như phía Transformer), nên $\text{std}(\text{logit})$
+tuy vẫn lớn hơn bình thường nhưng không bùng nổ theo $\sqrt{D}$ --- khớp với
+mức lệch nhẹ hơn nhiều (13,0 so với 267,6).
+
+\subsection{Giải pháp và kết quả sau khi sửa}
+
+Sửa bằng cách khởi tạo embedding (và positional embedding của Transformer)
+theo kiểu GPT-2/BERT: $E \sim \mathcal{N}(0,\,0{,}02^2)$ thay vì
+$\mathcal{N}(0,1)$, đồng thời gán 0 cho hàng ứng với \texttt{<pad>} ngay tại
+lúc khởi tạo (để token đệm không mang thông tin giả trước khi có gradient nào
+chạy qua). Sau khi sửa, cross-entropy tại đầu smoke run của cả hai decoder hội
+tụ đúng về vùng kỳ vọng: LSTM $\approx 7{,}84$, Transformer $\approx 7{,}95$ ---
+sai khác nhỏ còn lại đến từ các tầng khác (dropout, chiếu ảnh) chứ không còn
+do thang khởi tạo embedding. Cả hai sau đó giảm đều qua các epoch của smoke
+run (2 epoch, 512 mẫu): LSTM $7{,}53 \to 6{,}71$; Transformer $7{,}93 \to
+7{,}90$ --- xác nhận gradient chảy đúng hướng, không còn hiện tượng bùng nổ ở
+bước đầu.
+
+\subsection{Bài học}
+
+So sánh công bằng hai kiến trúc (mục tiêu chính của đồ án, \S3.3) không chỉ
+đòi hỏi giữ cố định các siêu tham số hiển thị (seed, batch size, optimizer)
+mà còn cả những chi tiết ``ngầm định'' nằm sâu trong cách PyTorch khởi tạo
+tầng mặc định --- ở đây là thang khởi tạo của embedding khi nó được tie với
+tầng đầu ra \autocite{press2017using}. Một kiến trúc (Transformer, do có
+LayerNorm cuối theo kiểu pre-norm \autocite{vaswani2017attention}) có thể lộ
+lỗi rõ ràng hơn kiến trúc kia dù cả hai cùng mắc lỗi như nhau, khiến việc chẩn
+đoán dễ quy nhầm cho ``Transformer khó train hơn'' thay vì đúng nguyên nhân kỹ
+thuật. Hai unit test hồi quy
+(\texttt{test\_embedding\_init\_nho\_khi\_tie\_weight} ở cả
+\texttt{test\_lstm\_decoder.py} và \texttt{test\_transformer\_decoder.py})
+được thêm ngay sau khi sửa để khóa lại bất biến này --- kiểm tra độ lệch chuẩn
+của bảng embedding đủ nhỏ ($< 0,1$) và hàng \texttt{<pad>} bằng 0 tại lúc khởi
+tạo, tránh lỗi tái diễn nếu decoder được viết lại sau này.
+
 \section{Bàn luận}
 
 \begin{itemize}

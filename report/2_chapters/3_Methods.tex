@@ -15,10 +15,13 @@ là một mẫu huấn luyện, cho $6.000\times 5 = 30.000$ mẫu.
 Caption được chuyển chữ thường, loại ký tự không phải chữ/số, tách theo khoảng
 trắng. Từ điển mức từ giữ các từ xuất hiện $\geq 5$ lần trong tập huấn luyện,
 cộng 4 token đặc biệt \texttt{<pad>}, \texttt{<bos>}, \texttt{<eos>},
-\texttt{<unk>}. Câu bị cắt ở 20 từ (độ phủ và tỷ lệ \texttt{<unk>} thực tế:
-\TBD\ --- điền sau khi build từ điển). Chọn mức từ thay vì BPE vì kho từ vựng
-Flickr8k nhỏ và mỗi token là một từ trọn vẹn, thuận tiện khi đọc bản đồ nhiệt
-attention.
+\texttt{<unk>}. Đo trên 30.000 caption của tập huấn luyện: từ điển thu được
+\textbf{2.539} từ (min\_freq = 5); \textbf{98,4\%} caption có độ dài $\leq 20$
+từ (ngưỡng cắt \texttt{max\_words}); sau khi cắt, tỷ lệ token \texttt{<unk>}
+trên toàn bộ token huấn luyện là \textbf{2,48\%} --- đủ thấp để ngưỡng cắt và
+tần suất tối thiểu không làm mất nhiều thông tin ngữ nghĩa. Chọn mức từ thay vì
+BPE vì kho từ vựng Flickr8k nhỏ và mỗi token là một từ trọn vẹn, thuận tiện khi
+đọc bản đồ nhiệt attention.
 
 \subsection{Ảnh: trích đặc trưng một lần}
 Toàn bộ ảnh được đưa qua ResNet-50 \autocite{he2016resnet} huấn luyện sẵn trên
@@ -52,7 +55,8 @@ cross-attention, trong khi bản đồ nhiệt ``từ nào nhìn vùng nào'' l�
 
 \begin{table}[H]
 	\centering
-	\caption{Cấu hình hai decoder (số tham số chính xác: \TBD\ --- in từ code).}
+	\caption{Cấu hình hai decoder (số tham số in trực tiếp từ
+	\texttt{model.count\_parameters()} khi khởi tạo, vocab 2.539 từ).}
 	\label{tab:architecture}
 	\begin{tabular}{lcc}
 		\hline
@@ -64,10 +68,122 @@ cross-attention, trong khi bản đồ nhiệt ``từ nào nhìn vùng nào'' l�
 		FFN & --- & 2048 \\
 		Dropout & 0,3 & 0,3 \\
 		Tie embedding--output & có & có \\
-		Số tham số & \TBD & \TBD \\
+		Số tham số & 6.551.041 & 14.974.464 \\
 		\hline
 	\end{tabular}
 \end{table}
+
+Biến thể ablation \emph{LSTM không attention} (mục hạn chế attention bằng
+mean-pool cố định, xem \ref{tab:main-results}) có \textbf{6.025.216} tham số ---
+ít hơn bản có attention đúng bằng phần trọng số của \texttt{BahdanauAttention}
+($W_h, W_f, v$), phần còn lại (embedding tie, LSTMCell, hai lớp khởi tạo
+$h_0,c_0$) giữ nguyên. Transformer có xấp xỉ \textbf{2,3×} số tham số của
+LSTM+Bahdanau dù cùng $d_{\text{model}}=512$: chi phí nằm ở ba khối lặp lại,
+mỗi khối mang hai tầng \texttt{nn.MultiheadAttention} (self + cross, mỗi tầng
+có $4$ ma trận chiếu $Q,K,V,O$ kích thước $512\times512$) và một FFN
+$512\to2048\to512$ --- so với một \texttt{LSTMCell} duy nhất của decoder kia.
+
+\section{Chi tiết cài đặt hai decoder}
+\label{sec:decoder-detail}
+
+Mục này đi sâu vào từng phép biến đổi tensor bên trong hai decoder, khớp trực
+tiếp với mã nguồn \texttt{final/models/lstm\_decoder.py} và
+\texttt{final/models/transformer\_decoder.py}. Ký hiệu: $B$ là batch size, $R=49$
+số vùng ảnh, $D=512=d_{\text{model}}$, $T$ độ dài chuỗi caption tại thời điểm
+đang xử lý.
+
+\subsection{LSTM + Bahdanau: từng bước một}
+
+Đầu vào cho decoder là \texttt{feats\_proj} $\in \mathbb{R}^{B\times R\times D}$
+(đã qua \texttt{ImageProjection}). Trạng thái ẩn và trạng thái cell của
+\texttt{LSTMCell} \emph{không} khởi tạo bằng không mà bằng trung bình các vùng
+ảnh, qua hai lớp tuyến tính riêng:
+\begin{equation}
+	\bar f = \frac{1}{R}\sum_{i=1}^{R} f_i \in \mathbb{R}^{B\times D}, \qquad
+	h_0 = \tanh(W_{c\to h}\,\bar f), \qquad
+	c_0 = \tanh(W_{c\to c}\,\bar f),
+\end{equation}
+với $W_{c\to h}, W_{c\to c}: \mathbb{R}^{D}\to\mathbb{R}^{D}$ (\texttt{init\_h},
+\texttt{init\_c} trong code) --- cách "gieo mầm" trạng thái ẩn bằng chính nội
+dung ảnh, thay vì để mô hình tự học từ vector không, giúp bước sinh từ đầu tiên
+đã có ngữ cảnh thị giác.
+
+Tại bước $t$, attention Bahdanau (công thức~\ref{eq:bahdanau}) dùng $h_{t-1}
+\in \mathbb{R}^{B\times D}$ và toàn bộ $R$ vùng để tính vector ngữ cảnh $c_t \in
+\mathbb{R}^{B\times D}$ và trọng số $\alpha_t \in \mathbb{R}^{B\times R}$ (tổng
+theo chiều $R$ bằng 1 --- bất biến được khóa bằng unit test). Đầu vào của
+\texttt{LSTMCell} là phép ghép nối (concat), không phải cộng:
+\begin{equation}
+	x_t = \big[\,e_{t-1} \;;\; c_t\,\big] \in \mathbb{R}^{B\times 2D}, \qquad
+	(h_t, c^{\text{cell}}_t) = \text{LSTMCell}(x_t, (h_{t-1}, c^{\text{cell}}_{t-1})),
+\end{equation}
+với $e_{t-1} \in \mathbb{R}^{B\times D}$ là embedding của từ thật ở bước trước
+(teacher forcing). Đây là lý do \texttt{LSTMCell} được khai báo với chiều đầu
+vào $2D=1024$ dù hidden size chỉ $D=512$. Logits bước $t$ là
+$\text{fc}(\text{dropout}(h_t)) \in \mathbb{R}^{B\times V}$ với $V=2.539$. Biến
+thể tắt attention (ablation) thay $c_t$ bằng $\bar f$ cố định và $\alpha_t$
+bằng phân phối đều $1/R$ tại mọi bước --- cùng luồng tensor, chỉ khác nguồn
+ngữ cảnh.
+
+\subsection{Transformer decoder: từng sublayer trong một khối pre-norm}
+
+Chuỗi từ vào được cộng embedding token với \emph{positional embedding học
+được} (không phải sin/cos cố định như bản gốc \autocite{vaswani2017attention}
+--- hợp lý hơn khi $T$ luôn $\leq 22$ và có đủ dữ liệu để học bảng vị trí):
+\begin{equation}
+	x^{(0)} = \text{dropout}\big(E[\text{cap\_in}] + P[0..T{-}1]\big) \in
+	\mathbb{R}^{B\times T\times D},
+\end{equation}
+với $E \in \mathbb{R}^{V\times D}$ là bảng embedding (tie với tầng ra, xem
+dưới) và $P \in \mathbb{R}^{22\times D}$ là bảng vị trí (\texttt{max\_len=22}
+$=$ 20 từ $+$ \texttt{<bos>} $+$ \texttt{<eos>}).
+
+Mỗi khối (3 khối, lặp lại độc lập tham số) áp dụng ba sublayer theo kiểu
+\emph{pre-norm} --- LayerNorm đứng \emph{trước} phép biến đổi, residual cộng
+\emph{sau}, khác với bản Transformer gốc (post-norm):
+\begin{align}
+	x' &= x + \text{dropout}\big(\text{MHA}_{\text{self}}(\text{LN}_1(x),\,
+	\text{LN}_1(x),\, \text{LN}_1(x);\ \text{mask}=M)\big), \\
+	x'' &= x' + \text{dropout}\big(\text{MHA}_{\text{cross}}(\text{LN}_2(x'),\,
+	\text{mem},\, \text{mem})\big), \\
+	x''' &= x'' + \text{dropout}\big(\text{FFN}(\text{LN}_3(x''))\big),
+\end{align}
+trong đó $\text{mem} = \text{feats\_proj} \in \mathbb{R}^{B\times R\times D}$
+không đổi qua các khối (đầu ra của \texttt{ImageProjection}, không phải đầu ra
+khối trước). Self-attention có $Q,K,V \in \mathbb{R}^{B\times T\times D}$, chia
+8 đầu $\Rightarrow$ mỗi đầu $d_k = D/8 = 64$; cross-attention có $Q \in
+\mathbb{R}^{B\times T\times D}$ (từ chuỗi chữ) nhưng $K, V \in
+\mathbb{R}^{B\times R\times D}$ (từ 49 vùng ảnh) --- đúng vai trò khối
+\emph{fusion} đa phương thức. Trọng số cross-attention trung bình 8 đầu, hình
+$(B, T, R)$, được giữ lại từ khối cuối cùng để vẽ bản đồ nhiệt.
+
+Mặt nạ nhân quả $M \in \{0,1\}^{T\times T}$ là tam giác trên nghiêm ngặt
+(\texttt{torch.triu(\dots, diagonal=1)}), giá trị \texttt{True} tại $(i,j)$
+với $j>i$ nghĩa là vị trí $i$ \emph{không được phép} nhìn vị trí $j$ --- chặn
+nhìn tương lai trong khi vẫn xử lý toàn bộ $T$ vị trí song song (khác LSTM
+phải lặp tuần tự $T$ bước). FFN là $D \to 2048 \to D$ với GELU ở giữa. Vì
+kiến trúc pre-norm không chuẩn hoá đầu ra khối cuối, cần một
+\textbf{LayerNorm cuối} ($\text{LN}_{\text{final}}$) trước khi chiếu ra logits
+--- thiếu tầng này, phân phối $x^{(3)}$ đưa thẳng vào \texttt{fc} sẽ có
+phương sai trôi dạt tuỳ theo độ sâu, không so sánh được giữa các vị trí:
+\begin{equation}
+	\text{logits} = \text{LN}_{\text{final}}(x^{(3)})\, E^\top \in
+	\mathbb{R}^{B\times T\times V}.
+\end{equation}
+
+\subsection{Weight tying và hệ quả lên khởi tạo}
+
+Cả hai decoder gán \texttt{fc.weight = embedding.weight}: tầng chiếu ra logits
+dùng lại đúng ma trận embedding thay vì một ma trận $D\times V$ độc lập
+\autocite{press2017using}. Lợi ích: giảm khoảng 1,5 triệu tham số ở vocab
+2.539 từ (bằng đúng $D \times V = 512 \times 2.539$), và ràng buộc không gian
+biểu diễn của từ ở đầu vào phải nhất quán với không gian dùng để xếp hạng từ ở
+đầu ra --- quan trọng khi dữ liệu huấn luyện nhỏ (30.000 caption). Cái giá
+phải trả là ma trận embedding không còn "chỉ là embedding": nó đồng thời đóng
+vai trò ma trận chiếu đầu ra, nên thang khởi tạo của nó ảnh hưởng trực tiếp
+đến phương sai của logits ngay tại bước đầu tiên. Mục~\ref{sec:embedding-init}
+(chương~\ref{chap:experiments}) trình bày chi tiết một lỗi thực tế gặp phải vì
+điều này và cách phát hiện/sửa nó.
 
 \section{Cấu hình huấn luyện}
 
@@ -97,8 +213,53 @@ CIDEr, baseline là điểm của câu giải mã greedy.
 
 Mã nguồn tổ chức thành package \texttt{final/} (PyTorch), mọi lựa chọn thí nghiệm
 đi qua một \texttt{Config} dataclass trung tâm --- đổi thí nghiệm là đổi cờ dòng
-lệnh, không sửa code. Kiểm thử đơn vị (pytest) khóa các bất biến: mặt nạ nhân quả
-không nhìn tương lai, trọng số attention có tổng bằng 1, encode/decode từ điển
-khứ hồi, greedy/beam dừng đúng ở \texttt{<eos>}. Phát triển và smoke test trên
-Mac (MPS); huấn luyện thật trên máy chủ từ xa GPU NVIDIA RTX PRO 4000 Blackwell
-24\,GB (PyTorch 2.11, CUDA 12.8) qua SSH, tiến trình chạy trong tmux.
+lệnh, không sửa code (cùng khuôn với đồ án giữa kỳ). Kiểm thử đơn vị (pytest)
+khóa các bất biến: mặt nạ nhân quả không nhìn tương lai, trọng số attention có
+tổng bằng 1, encode/decode từ điển khứ hồi, greedy/beam dừng đúng ở
+\texttt{<eos>}, và (bổ sung sau phát hiện ở
+mục~\ref{sec:embedding-init}) thang khởi tạo embedding đủ nhỏ khi tie weight.
+
+\subsection{Hai máy, hai vai trò}
+
+\textbf{Máy phát triển (Mac, chip Apple Silicon, backend MPS)} dùng để viết
+code theo TDD và chạy \emph{smoke test}: mỗi lệnh huấn luyện có cờ
+\texttt{--smoke} rút tập huấn luyện còn 512 mẫu, 2 epoch --- đủ để xác nhận
+toàn bộ pipeline (tải dữ liệu $\to$ build vocab $\to$ trích đặc trưng $\to$
+train $\to$ evaluate $\to$ visualize) chạy hết không lỗi trong vài phút, trước
+khi tốn thời gian trên máy có GPU. \texttt{pick\_device()} tự chọn CUDA
+$\to$ MPS $\to$ CPU theo thứ tự ưu tiên nên cùng một lệnh chạy được trên cả
+hai máy.
+
+\textbf{Máy huấn luyện thật (``trainbox'')} là máy Windows chạy WSL2 (Ubuntu),
+GPU NVIDIA RTX PRO 4000 Blackwell 24\,GB, Python 3.12 quản lý bằng \texttt{uv}
+trong virtualenv riêng (\texttt{\textasciitilde/work/.venv}), PyTorch~2.11 với
+CUDA~12.8 (\texttt{cu128}) --- kiến trúc Blackwell \emph{bắt buộc} cu128 trở
+lên, bản cu121 không nhận diện được GPU này. Truy cập qua SSH; tiến trình
+huấn luyện chạy trong \texttt{tmux} để không mất phiên khi mất kết nối mạng,
+kéo checkpoint và output về máy dev bằng \texttt{rsync}.
+
+\subsection{Quy trình phát triển: TDD theo 13 task, review độc lập}
+
+Toàn bộ package được lập kế hoạch trước thành 13 task tuần tự (từ scaffold
+\texttt{Config} đến SCST), mỗi task viết theo chu trình \emph{test trước, code
+sau}: định nghĩa hợp đồng đầu vào/ra của module, viết unit test cho hợp đồng
+đó, thấy test đỏ, rồi mới cài đặt tới khi test xanh. Tổng cộng 44 unit test
+được viết qua quá trình này (bảng dưới liệt kê theo nhóm), phủ từ tokenize/
+vocab, hình dạng tensor của từng decoder, mặt nạ nhân quả, đến beam search
+dừng đúng \texttt{<eos>}. Mỗi task, sau khi code xanh, còn qua một bước
+\emph{review độc lập} (một phiên riêng đọc lại diff so với hợp đồng đã định
+nghĩa, không dùng lại ngữ cảnh của phiên viết code) trước khi coi là xong ---
+mục tiêu là bắt các lỗi kiểu ``code chạy nhưng sai hợp đồng'' mà bản thân tác
+giả code dễ bỏ sót vì đã quen với logic vừa viết.
+
+\subsection{\texttt{run\_all.sh}: idempotent, chống đứt phiên}
+
+Pipeline đầy đủ (tải dữ liệu $\to$ vocab $\to$ trích đặc trưng $\to$ ba run
+huấn luyện chính $\to$ evaluate $\to$ visualize) được gói trong một script duy
+nhất, chạy được cả ở chế độ \texttt{--smoke} lẫn chạy thật. Script không giả
+định chạy trọn vẹn một lần: trước mỗi bước huấn luyện, nó kiểm tra checkpoint
+tương ứng (\texttt{final/checkpoints/<run>.pt}) đã tồn tại chưa --- nếu có thì
+bỏ qua bước đó. Nhờ vậy, nếu phiên SSH tới trainbox bị đứt giữa chừng (mất
+mạng, hết giờ), chạy lại đúng lệnh cũ sẽ tiếp tục từ run chưa xong thay vì làm
+lại từ đầu; đây là lý do thiết kế lưu checkpoint theo tên run cố định
+(\texttt{lstm.pt}, \texttt{transformer.pt}, \dots) thay vì theo timestamp.

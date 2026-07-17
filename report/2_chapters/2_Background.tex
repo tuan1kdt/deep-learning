@@ -14,6 +14,40 @@ Với sinh mô tả ảnh, encoder thường là CNN huấn luyện sẵn trên 
 \emph{Show and Tell} \autocite{vinyals2015show} nén cả ảnh vào một vector duy nhất
 --- nút thắt cổ chai thông tin mà attention sau này giải quyết.
 
+\section{Mạng hồi quy LSTM: giữ gradient qua chuỗi dài}
+
+Một decoder hồi quy đơn giản (RNN thường) cập nhật trạng thái ẩn bằng
+$h_t = \tanh(W_h h_{t-1} + W_x x_t)$. Lan truyền ngược qua $T$ bước nhân liên
+tiếp $T$ đạo hàm $\partial h_t/\partial h_{t-1}$, mỗi đạo hàm chứa thừa số
+$W_h^\top \operatorname{diag}(\tanh'(\cdot))$; nếu trị riêng lớn nhất của
+$W_h$ nhỏ hơn 1, tích $T$ số hạng này co về 0 theo cấp số nhân (\emph{vanishing
+gradient}) --- mô hình ``quên'' phụ thuộc xa; nếu lớn hơn 1, tích phát nổ
+(\emph{exploding gradient}). Đây là hạn chế cốt lõi khiến RNN thường khó học
+phụ thuộc dài, đã khảo sát bằng NumPy ở day6 của môn học.
+
+LSTM \autocite{hochreiter1997lstm} thêm một \emph{cell state} $c_t$ chạy xuyên
+suốt theo chuỗi cộng tuyến tính (không qua phi tuyến trực tiếp), cùng ba cổng
+sigmoid $\sigma(\cdot) \in (0,1)^D$ điều khiển luồng thông tin vào/ra cell đó:
+\begin{align}
+	f_t &= \sigma(W_f [h_{t-1}; x_t] + b_f) & \text{(cổng quên --- giữ lại bao
+	nhiêu \% của } c_{t-1}\text{)} \\
+	i_t &= \sigma(W_i [h_{t-1}; x_t] + b_i) & \text{(cổng vào --- nạp bao nhiêu
+	thông tin mới)} \\
+	\tilde{c}_t &= \tanh(W_c [h_{t-1}; x_t] + b_c) & \text{(ứng viên cell mới)} \\
+	c_t &= f_t \odot c_{t-1} + i_t \odot \tilde{c}_t & \text{(cập nhật cell:
+	cộng, không nhân ma trận)} \\
+	o_t &= \sigma(W_o [h_{t-1}; x_t] + b_o) & \text{(cổng ra)} \\
+	h_t &= o_t \odot \tanh(c_t) & \text{(trạng thái ẩn xuất ra ngoài)}
+\end{align}
+với $\odot$ là nhân từng phần tử. Điểm mấu chốt giữ gradient tốt hơn RNN
+thường: đạo hàm $\partial c_t/\partial c_{t-1} = f_t$ (cộng với các số hạng
+phụ) --- không có phép nhân ma trận trọng số lặp lại qua thời gian trên nhánh
+cell state, chỉ nhân từng phần tử với cổng quên $f_t \in (0,1)^D$. Khi cổng
+quên học được giá trị gần 1 cho một chiều thông tin cần nhớ lâu, gradient trên
+chiều đó truyền ngược qua nhiều bước gần như không suy giảm; ba cổng còn lại
+cho phép mô hình \emph{chọn lọc} thông tin nào giữ, nạp, xuất --- thay vì bị
+ép ghi đè toàn bộ trạng thái ở mỗi bước như RNN thường.
+
 \section{Cơ chế attention}
 
 \subsection{Attention cộng tính Bahdanau}
@@ -41,29 +75,151 @@ tích vô hướng có tỷ lệ trên toàn chuỗi:
 	\operatorname{Attention}(Q,K,V)
 	= \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt{d_k}}\right) V.
 \end{equation}
+Thay vì tính một phép attention duy nhất trên toàn bộ $D$ chiều,
+\emph{multi-head attention} chiếu $Q,K,V$ xuống $H$ ``đầu'' song song, mỗi đầu
+một không gian con $d_k = D/H$ chiều, để mỗi đầu có thể học một kiểu quan hệ
+khác nhau (một đầu bắt cặp danh từ--tính từ, đầu khác bắt cặp chủ ngữ--động
+từ, v.v.):
+\begin{align}
+	\text{head}_k &= \operatorname{Attention}(Q W_k^Q,\; K W_k^K,\; V W_k^V), &
+	k = 1,\dots,H, \\
+	\operatorname{MultiHead}(Q,K,V) &= \big[\text{head}_1;\dots;\text{head}_H\big]\, W^O,
+\end{align}
+với $W_k^Q, W_k^K, W_k^V \in \mathbb{R}^{D\times d_k}$ là ma trận chiếu riêng
+của từng đầu, và $W^O \in \mathbb{R}^{D\times D}$ chiếu vector nối (concat) $H$
+đầu về lại $D$ chiều. Trong đồ án, $D=512$, $H=8 \Rightarrow d_k = 64$.
+
 Trong decoder cho captioning, mỗi khối gồm ba tầng con: (i) \emph{masked
 self-attention} --- chuỗi từ tự nhìn phần quá khứ của chính nó (mặt nạ nhân quả
 chặn nhìn tương lai); (ii) \emph{cross-attention} --- truy vấn $Q$ đến từ chuỗi từ,
 khóa/giá trị $K,V$ đến từ 49 vùng ảnh, chính là khối \emph{fusion} trong sơ đồ
-đa phương thức; (iii) mạng FFN theo vị trí. Kiến trúc pre-norm (LayerNorm trước
-attention) được chọn vì ổn định hơn khi huấn luyện từ đầu trên dữ liệu nhỏ.
+đa phương thức; (iii) mạng FFN theo vị trí --- hai tầng tuyến tính với phi
+tuyến ở giữa, $D \to d_{ff} \to D$ (thường $d_{ff} = 4D$), áp dụng \emph{độc
+lập cho từng vị trí} trong chuỗi. Vai trò của FFN khác với attention:
+attention trộn thông tin \emph{giữa} các vị trí (ai nhìn ai), còn FFN biến đổi
+phi tuyến biểu diễn \emph{tại từng vị trí} sau khi đã trộn --- đây là nơi phần
+lớn tham số và năng lực biểu diễn phi tuyến của khối nằm ở đó.
+
+\textbf{Pre-norm và post-norm.} Bản Transformer gốc chuẩn hoá \emph{sau} mỗi
+sublayer (post-norm): $x_{t+1} = \operatorname{LN}(x_t + \text{Sublayer}(x_t))$.
+Cách này đặt LayerNorm ngay trên đường residual chính, nên ở mạng sâu, thang độ
+lớn của gradient truyền ngược qua residual phụ thuộc vào chính LayerNorm đó và
+dễ bất ổn nếu không có lịch \emph{warmup} learning rate đủ dài và cẩn thận.
+\emph{Pre-norm} chuẩn hoá \emph{trước} sublayer và cộng residual ở dạng thô:
+$x_{t+1} = x_t + \text{Sublayer}(\operatorname{LN}(x_t))$ --- đường residual
+không đi qua LayerNorm nào, nên gradient có một ``đường tắt'' gần như tuyến
+tính xuyên suốt mạng, ổn định hơn nhiều ngay cả khi khởi tạo chưa tối ưu hoặc
+không có warmup dài. Đánh đổi: vì residual không được chuẩn hoá, phương sai
+của $x_t$ có thể tăng dần theo độ sâu, nên cần một LayerNorm cuối cùng
+($\text{LN}_{\text{final}}$) trước tầng đọc ra để đưa biểu diễn về đúng thang
+trước khi tính logits. Với dữ liệu nhỏ như Flickr8k (30.000 caption huấn
+luyện) --- nơi không có hàng triệu bước để lịch warmup ``sửa'' một kiến trúc
+kém ổn định --- pre-norm là lựa chọn an toàn hơn để huấn luyện Transformer từ
+đầu (không tinh chỉnh từ mô hình đã huấn luyện sẵn).
 
 \section{Huấn luyện teacher forcing và các kỹ thuật ổn định}
 
 Huấn luyện chuẩn (gọi là SFT trong báo cáo này) dùng \emph{teacher forcing}:
 tại bước $t$, mô hình nhận từ \emph{thật} $y_{t-1}$ làm đầu vào thay vì từ nó
 vừa sinh, và cực tiểu hóa cross-entropy trung bình trên các vị trí không phải
-đệm. Các kỹ thuật ổn định được dùng: label smoothing $0{,}1$
-\autocite{szegedy2016rethinking}, tie trọng số giữa ma trận embedding và tầng
-đầu ra \autocite{press2017using}, gradient clipping, và với Transformer là
-warmup + cosine decay cho learning rate.
+đệm. Ngoài gradient clipping và (với Transformer) warmup + cosine decay cho
+learning rate, hai kỹ thuật ổn định --- label smoothing và tie trọng số ---
+đáng nói kỹ hơn vì cả hai đều thay đổi trực tiếp không gian tối ưu của bài
+toán, không chỉ là chi tiết cài đặt.
+
+\subsection{Label smoothing}
+
+Với cross-entropy thông thường, nhãn đúng $y_t$ được mã hoá one-hot: xác suất
+mục tiêu bằng 1 tại đúng từ, 0 ở mọi từ khác. Cực tiểu hoá cross-entropy với
+mục tiêu one-hot khuyến khích mô hình đẩy logit của từ đúng ra vô cực (so với
+các từ còn lại) --- dễ gây tự tin thái quá (overconfident) và làm mô hình kém
+hiệu chỉnh (poorly calibrated), đặc biệt nguy hiểm khi dữ liệu ít
+\autocite{szegedy2016rethinking}. \emph{Label smoothing} trộn phân phối
+one-hot với một phân phối đều trên $V$ từ, theo hệ số $\varepsilon = 0{,}1$:
+\begin{equation}
+	q'(k \mid y_t) = (1-\varepsilon)\, \mathbb{1}[k = y_t] +
+	\frac{\varepsilon}{V},
+\end{equation}
+tức mục tiêu không còn là xác suất 1 tuyệt đối cho từ đúng mà là $1-\varepsilon
++ \varepsilon/V$, và mọi từ sai đều nhận một xác suất mục tiêu nhỏ
+$\varepsilon/V > 0$ thay vì đúng 0. Cross-entropy giữa phân phối dự đoán và
+$q'$ (thay vì one-hot gốc) đặt một \emph{trần} tự nhiên lên độ lớn logit ---
+mô hình không còn lợi khi đẩy logit từ đúng lớn vô hạn, giúp gradient không
+bị các mẫu ``dễ'' lấn át và cải thiện hiệu chỉnh xác suất, điều có ích khi
+đánh giá bằng BLEU/CIDEr trên diverse references.
+
+\subsection{Tie trọng số embedding--output}
+
+Tầng embedding đầu vào ($E \in \mathbb{R}^{V\times D}$: tra bảng, từ id ra
+vector) và tầng chiếu ra logits ($W_{\text{out}} \in \mathbb{R}^{D\times V}$:
+từ vector ẩn ra điểm số mỗi từ) về bản chất đều là ánh xạ giữa không gian từ
+$V$ chiều rời rạc và không gian ẩn $D$ chiều liên tục --- chỉ khác chiều đi.
+\emph{Weight tying} \autocite{press2017using} đặt $W_{\text{out}} = E^\top$,
+dùng chung một ma trận cho cả hai chiều thay vì học hai ma trận độc lập. Lợi
+ích kép: (i) giảm số tham số đúng bằng $D \times V$ --- với $V \approx 2.500$
+và $D = 512$ như trong đồ án, xấp xỉ 1,3 triệu tham số, không nhỏ so với tổng
+vài triệu của một decoder cỡ nhỏ; (ii) ràng buộc \emph{ngữ nghĩa}: hai từ có
+vector embedding gần nhau (dùng thay thế nhau được trong câu) cũng sẽ được
+chiếu ra logits gần nhau, tức mô hình có xu hướng gán xác suất tương tự cho
+các từ đồng nghĩa/cùng ngữ cảnh ở cả hai chiều vào và ra --- một ràng buộc quy
+chuẩn (regularization) hữu ích khi dữ liệu huấn luyện nhỏ. Cái giá đánh đổi
+(thang khởi tạo của $E$ ảnh hưởng trực tiếp đến logits) được phân tích như một
+lỗi thực tế gặp phải ở chương~\ref{chap:experiments},
+mục~\ref{sec:embedding-init}.
 
 \section{Giải mã: greedy và beam search}
 
-Khi suy luận, mô hình phải tự sinh: greedy chọn từ có xác suất cao nhất mỗi bước
---- nhanh nhưng dễ mắc kẹt ở lựa chọn cục bộ; beam search giữ $B$ giả thuyết tốt
-nhất song song, chấm điểm bằng log-xác-suất chuẩn hóa theo độ dài để không thiên
-vị câu ngắn.
+Khi suy luận, mô hình không còn từ thật để đưa vào ở bước tiếp theo (khác
+teacher forcing lúc huấn luyện) --- nó phải tự sinh từ, dùng chính dự đoán của
+mình làm đầu vào cho bước sau. Bài toán tìm chuỗi $\hat y$ tối ưu hoá xác suất
+$p(y\mid I)$ (phương trình đầu chương) là tìm kiếm trên không gian có kích
+thước $V^T$ --- không khả thi vét cạn, nên cần chiến lược giải mã xấp xỉ.
+
+\subsection{Greedy decoding}
+
+Đơn giản nhất: tại mỗi bước $t$, chọn từ có xác suất cao nhất theo phân phối
+hiện tại, $\hat y_t = \arg\max_k p(k \mid \hat y_{<t}, I)$, rồi dùng $\hat
+y_t$ làm đầu vào bước $t{+}1$, dừng khi sinh \texttt{<eos>} hoặc chạm độ dài
+tối đa. Nhanh (một lần forward mỗi bước, không nhân bản giả thuyết) nhưng
+\emph{tham lam cục bộ}: một lựa chọn tốt nhất tại bước $t$ có thể dẫn tới ngõ
+cụt khiến toàn câu kém hơn một lựa chọn tưởng như kém hơn tại bước $t$ nhưng
+mở ra tiếp nối tốt hơn ở bước $t{+}1$ --- greedy không có cách quay lại sửa.
+
+\subsection{Beam search}
+
+Beam search giữ đồng thời $B$ giả thuyết (beam) có điểm log-xác-suất cộng dồn
+cao nhất, thay vì chỉ giữ 1. Tại mỗi bước:
+\begin{enumerate}
+	\item Với mỗi giả thuyết đang giữ (tối đa $B$ giả thuyết), tính phân phối
+	xác suất từ tiếp theo và mở rộng thành $V$ ứng viên con.
+	\item Gộp tất cả ứng viên con của $B$ giả thuyết ($B \times V$ ứng viên),
+	xếp hạng theo tổng log-xác-suất cộng dồn.
+	\item Giữ lại đúng $B$ ứng viên điểm cao nhất làm giả thuyết cho bước sau;
+	giả thuyết đã sinh \texttt{<eos>} được đưa vào tập hoàn chỉnh và loại khỏi
+	beam đang mở rộng (không mở rộng thêm).
+	\item Lặp lại tới khi đủ $B$ giả thuyết hoàn chỉnh hoặc chạm độ dài tối đa;
+	trả về giả thuyết hoàn chỉnh điểm cao nhất.
+\end{enumerate}
+Vì điểm là \emph{tổng} log-xác-suất (mỗi số hạng $\leq 0$), câu càng dài điểm
+càng âm hơn --- so sánh trực tiếp giữa các giả thuyết hoàn chỉnh có độ dài
+khác nhau sẽ luôn thiên vị câu ngắn. Beam search dùng \emph{length
+normalization}, chuẩn hoá điểm theo độ dài trước khi so sánh/chọn câu cuối
+cùng:
+\begin{equation}
+	\text{score}(\hat y) = \frac{1}{|\hat y|^{\gamma}} \sum_{t=1}^{|\hat y|}
+	\log p(\hat y_t \mid \hat y_{<t}, I),
+\end{equation}
+với $|\hat y|$ là độ dài câu (kể \texttt{<eos>}) và $\gamma \in [0,1]$ là hệ số
+điều chỉnh mức phạt câu dài ($\gamma=0$: không chuẩn hoá, giữ nguyên thiên vị
+câu ngắn; $\gamma=1$: chuẩn hoá theo trung bình log-xác-suất mỗi từ).
+
+\textbf{Đánh đổi theo $B$.} $B$ càng lớn, không gian tìm kiếm càng rộng, càng
+có cơ hội tránh được ngõ cụt của greedy ($B=1$ chính là greedy decoding), nhưng
+chi phí tính toán và bộ nhớ tăng tuyến tính theo $B$ (mỗi bước phải forward
+$B$ giả thuyết); $B$ quá lớn trên một mô hình huấn luyện với lượng dữ liệu nhỏ
+còn có thể chọn ra những câu có xác suất mô hình cao nhưng lệch khỏi phân phối
+ngôn ngữ tự nhiên (do mô hình chưa được hiệu chỉnh tốt). Đồ án so sánh $B \in
+\{3, 5\}$ với greedy để đo đánh đổi chất lượng--chi phí này trên tập kiểm tra.
 
 \section{Tinh chỉnh bằng học tăng cường: SCST}
 
