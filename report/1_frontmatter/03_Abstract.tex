@@ -13,14 +13,15 @@ decoder tự cài đặt từng khối (masked self-attention, cross-attention, 
 Bốn trục thí nghiệm được khảo sát: LSTM+attention so với Transformer; đóng góp
 của cơ chế attention (ablation tắt attention); giải mã greedy so với beam search;
 và (mở rộng) tinh chỉnh bằng học tăng cường SCST tối ưu trực tiếp CIDEr sau khi
-huấn luyện teacher forcing. Chất lượng được đo bằng BLEU-1..4 và CIDEr trên tập
-kiểm tra 1.000 ảnh, kèm phân tích định tính qua bản đồ nhiệt attention theo từng
-từ được sinh ra.
+huấn luyện teacher forcing. Chất lượng được đo bằng BLEU-1..4, ROUGE-L và CIDEr
+trên tập kiểm tra 1.000 ảnh, kèm phân tích định tính qua bản đồ nhiệt attention
+theo từng từ được sinh ra; các kết luận chính được kiểm tra độ vững qua 3 seed,
+sweep warmup và đường cong beam size.
 
-Kết quả chính: hai kiến trúc gần như ngang nhau trên 30.000 caption --- BLEU-4
-beam tốt nhất cùng đạt 0,219, Transformer nhỉnh ở CIDEr (0,587 so với 0,573)
-nhưng tốn 2,3 lần tham số; BLEU-4 21,9--22,1 ngang mốc \emph{Show, Attend and
-Tell} trên cùng bộ dữ liệu (21,3). Attention là thành phần đáng giá nhất: tắt nó
+Kết quả chính: hai kiến trúc hòa CIDEr trên 30.000 caption (qua 3 seed: 0,578
+$\pm$ 0,006 so với 0,576 $\pm$ 0,011), trong khi LSTM vượt có ý nghĩa ở ROUGE-L
+(0,482 so với 0,467) và BLEU-4 với chi phí 2,3 lần thấp hơn về tham số; BLEU-4
+21,9--22,1 ngang mốc \emph{Show, Attend and Tell} trên cùng bộ dữ liệu (21,3). Attention là thành phần đáng giá nhất: tắt nó
 làm CIDEr greedy giảm 10,5\% (0,536 xuống 0,485), lớn hơn cả khác biệt giữa hai
 kiến trúc. Beam search luôn vượt greedy với biên lớn nhất ở CIDEr, còn SCST nâng
 CIDEr greedy từ 0,536 lên 0,546 nhưng gần như không thêm gì khi đã dùng beam.

@@ -444,18 +444,170 @@ Khoảng cách hơn hai lần này là lời nhắc rằng số đo reward trên
 vòng RL không phải là ước lượng chất lượng --- chỉ có tập kiểm tra giữ kín mới
 trả lời được.
 
+\section{Thí nghiệm mở rộng: kiểm tra độ vững của kết luận}
+\label{sec:ext}
+
+Mọi kết quả phía trên đều đến từ \emph{một} lần chạy (seed 42) với một lịch
+warmup cố định --- hai chi tiết đủ sức làm lệch một so sánh sát nút như
+LSTM--Transformer. Trước khi chốt kết luận, chúng tôi dùng quỹ máy còn lại để
+trả lời bốn câu hỏi về độ vững: (i) khoảng cách giữa hai kiến trúc có phải
+artifact của lịch warmup không; (ii) nó có lớn hơn nhiễu seed không; (iii)
+đường cong theo beam bão hòa ở đâu; (iv) lợi ích của SCST có phụ thuộc kiến
+trúc không. Các đánh giá trong mục này bổ sung thêm ROUGE-L
+\autocite{lin2004rouge} --- F-measure trên chuỗi con chung dài nhất giữa câu
+sinh và tham chiếu --- bên cạnh BLEU và CIDEr.
+
+\subsection{Lịch warmup không phải thủ phạm}
+
+Ghi chú ở mục~\ref{sec:learning-process} rằng warmup 2.000 bước chiếm tới
+$\approx$8,5 epoch đặt ra nghi vấn: phải chăng Transformer ``thua thiệt'' vì
+mất một phần ba thời gian huấn luyện chỉ để khởi động? Chúng tôi huấn luyện lại
+Transformer với warmup 500 và 1.000 bước, giữ nguyên mọi siêu tham số khác.
+
+\begin{table}[H]
+	\centering
+	\caption{Transformer theo số bước warmup, giải mã beam 3, tập kiểm tra
+	1.000 ảnh.}
+	\label{tab:warmup-sweep}
+	\begin{tabular}{lcccc}
+		\hline
+		\textbf{Warmup} & \textbf{Val loss tốt nhất} & \textbf{B-4} & \textbf{ROUGE-L} & \textbf{CIDEr} \\
+		\hline
+		500   & 3,603 & 0,216 & 0,473 & 0,587 \\
+		1.000 & 3,603 & 0,215 & 0,471 & 0,583 \\
+		2.000 & 3,596 & 0,219 & 0,474 & 0,587 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Kết quả phẳng đến mức đáng ngạc nhiên: CIDEr dao động trong $[0{,}583;
+0{,}587]$ và val loss lệch nhau 0,007 --- nhỏ hơn nhiễu giữa hai seed (bảng
+dưới). Warmup ngắn hơn bốn lần không mở khóa thêm chất lượng nào: Transformer
+đã đạt trần của nó trên Flickr8k, và trần đó không phải do lịch học suất đặt ra.
+
+\subsection{Ba seed: hòa CIDEr trong nhiễu, LSTM vượt rõ ROUGE-L}
+
+Chúng tôi huấn luyện lại cả hai mô hình chính với seed 43 và 44 (giữ nguyên
+mọi thứ khác; seed 42 là run gốc), thu được trung bình $\pm$ độ lệch chuẩn trên
+ba lần chạy độc lập.
+
+\begin{table}[H]
+	\centering
+	\caption{Trung bình $\pm$ độ lệch chuẩn trên 3 seed (42/43/44), tập kiểm
+	tra 1.000 ảnh.}
+	\label{tab:seeds}
+	\begin{tabular}{llccc}
+		\hline
+		\textbf{Mô hình} & \textbf{Giải mã} & \textbf{B-4} & \textbf{ROUGE-L} & \textbf{CIDEr} \\
+		\hline
+		LSTM+attention & greedy & 0,209 $\pm$ 0,004 & 0,471 $\pm$ 0,002 & 0,543 $\pm$ 0,005 \\
+		Transformer    & greedy & 0,204 $\pm$ 0,002 & 0,460 $\pm$ 0,001 & 0,540 $\pm$ 0,010 \\
+		\hline
+		LSTM+attention & beam 3 & 0,220 $\pm$ 0,003 & 0,481 $\pm$ 0,001 & 0,575 $\pm$ 0,004 \\
+		Transformer    & beam 3 & 0,212 $\pm$ 0,005 & 0,469 $\pm$ 0,004 & 0,576 $\pm$ 0,011 \\
+		\hline
+		LSTM+attention & beam 5 & 0,221 $\pm$ 0,004 & 0,482 $\pm$ 0,001 & 0,578 $\pm$ 0,006 \\
+		Transformer    & beam 5 & 0,211 $\pm$ 0,003 & 0,467 $\pm$ 0,001 & 0,572 $\pm$ 0,007 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Bảng này buộc phải đọc lại bảng~\ref{tab:main-results} một cách thận trọng
+hơn. Về CIDEr, hai kiến trúc \emph{không phân biệt được}: 0,575--0,578 (LSTM)
+so với 0,572--0,576 (Transformer), chênh lệch nhỏ hơn một độ lệch chuẩn. Con số
+0,587 từng là ``CIDEr SFT cao nhất'' của Transformer seed 42 hóa ra nằm ở mép
+trên của dải nhiễu $\pm 0{,}011$ --- một lần gieo xúc xắc đẹp, không phải ưu
+thế kiến trúc. Đáng chú ý, nhiễu seed của Transformer lớn gấp đôi LSTM ở CIDEr
+(0,010--0,011 so với 0,004--0,006): mô hình nhiều tham số hơn trên dữ liệu nhỏ
+không chỉ không thắng mà còn \emph{kém ổn định hơn} giữa các lần chạy. Ngược
+lại, ở BLEU-4 và đặc biệt ROUGE-L, LSTM dẫn trước với khoảng cách nhiều lần độ
+lệch chuẩn (0,482 $\pm$ 0,001 so với 0,467 $\pm$ 0,001 ở beam 5) --- khác biệt
+này là thật, không phải nhiễu. Nói cách khác, ở quy mô Flickr8k, LSTM+attention
+là lựa chọn vừa tốt hơn (nhẹ, ổn định, vượt ROUGE-L/BLEU) vừa rẻ hơn 2,3 lần
+tham số.
+
+\subsection{Đường cong beam: hai kiến trúc bão hòa khác nhau}
+
+Bảng chính chỉ có ba điểm giải mã (greedy, beam 3, beam 5); chúng tôi mở rộng
+sang $k \in \{1, 3, 5, 8, 12\}$ trên hai checkpoint seed 42 (hình~\ref{fig:beam-curve};
+$k{=}1$ trùng khớp greedy đến từng chữ số --- một kiểm chứng chéo miễn phí cho
+cài đặt beam search).
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.8\textwidth]{figs/results/beam_curve.png}
+	\caption{CIDEr trên tập kiểm tra theo beam size $k$. LSTM tăng đơn điệu
+	và bão hòa dần; Transformer đạt đỉnh tại $k{=}3$ rồi tụt nhẹ.}
+	\label{fig:beam-curve}
+\end{figure}
+
+Hai đường cong có hình dạng khác nhau về chất: LSTM tăng đơn điệu (0,536 ở
+$k{=}1$ lên 0,578 ở $k{=}12$) và vẫn còn nhích ở $k{=}12$, trong khi
+Transformer đạt đỉnh ngay tại $k{=}3$ (0,587) rồi dao động quanh 0,571--0,579.
+Beam tối ưu là một siêu tham số \emph{theo kiến trúc}, không có giá trị đúng
+chung. Một hệ quả thực dụng: LSTM ở beam 8 đạt BLEU-4 0,221 --- đúng bằng con
+số tốt nhất mà SCST mang lại ở beam 5 --- nghĩa là chỉ cần tăng beam đã mua
+được phần lớn lợi ích của cả một vòng tinh chỉnh RL, với chi phí suy luận thay
+vì chi phí huấn luyện.
+
+\subsection{SCST trên Transformer: lợi ích lặp lại, không phụ thuộc kiến trúc}
+
+Mục~\ref{sec:scst-results} chỉ tinh chỉnh LSTM. Lặp lại đúng quy trình đó (3
+epoch, phần thưởng CIDEr) trên checkpoint Transformer:
+
+\begin{table}[H]
+	\centering
+	\caption{Transformer trước và sau SCST, tập kiểm tra 1.000 ảnh.}
+	\label{tab:scst-transformer}
+	\begin{tabular}{llccc}
+		\hline
+		\textbf{Mô hình} & \textbf{Giải mã} & \textbf{B-4} & \textbf{ROUGE-L} & \textbf{CIDEr} \\
+		\hline
+		SFT   & greedy & 0,207 & 0,460 & 0,534 \\
+		+SCST & greedy & 0,211 & 0,469 & 0,547 \\
+		\hline
+		SFT   & beam 3 & 0,219 & 0,474 & 0,587 \\
+		+SCST & beam 3 & 0,219 & 0,476 & 0,578 \\
+		\hline
+		SFT   & beam 5 & 0,215 & 0,469 & 0,571 \\
+		+SCST & beam 5 & 0,217 & 0,476 & 0,582 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Bức tranh lặp lại gần như nguyên vẹn kết quả bên LSTM: greedy hưởng lợi nhiều
+nhất (CIDEr $+0{,}013$, so với $+0{,}010$ bên LSTM), còn khi đã dùng beam thì
+biên lợi mờ đi. Điểm ``tụt'' duy nhất --- beam 3 giảm từ 0,587 xuống 0,578 ---
+không mâu thuẫn: 0,587 chính là điểm mép-trên-nhiễu đã bàn ở trên, và 0,578 sau
+SCST nằm gọn trong dải $0{,}576 \pm 0{,}011$ của ba seed. Kết luận phương pháp:
+lợi ích của SCST đến từ \emph{cơ chế} (kéo câu greedy về phía reward) chứ không
+từ kiến trúc decoder, nên có thể kỳ vọng nó chuyển giao sang các decoder khác.
+
+\subsection{Bảng chính, đọc lại}
+
+Bốn thí nghiệm bổ sung không lật đổ kết luận nào nhưng đổi \emph{trọng âm} của
+chúng: ``Transformer đạt CIDEr cao nhất'' (một lần chạy) trở thành ``hai kiến
+trúc hòa CIDEr trong nhiễu seed, LSTM vượt có ý nghĩa ở ROUGE-L/BLEU với chi
+phí 2,3 lần thấp hơn và độ ổn định giữa các lần chạy gấp đôi''. Đây là minh họa
+cụ thể cho một nguyên tắc thực nghiệm: với các khác biệt cỡ 0,01, một lần chạy
+không phải bằng chứng --- phải trả lời bằng nhiều seed và phân tích độ nhạy
+trước khi tuyên bố người thắng.
+
 \section{Bàn luận}
 
 \begin{itemize}
 	\item \textbf{LSTM và Transformer trên dữ liệu nhỏ:} với cùng ngân sách dữ
 	      liệu (30.000 caption), Transformer \emph{không} thua như lo ngại ban
-	      đầu --- nó đạt CIDEr SFT cao nhất (0,587, beam 3) và val loss thấp
-	      nhất --- nhưng cũng \emph{không} thắng thuyết phục: BLEU-4 hòa 0,219,
-	      và cái giá là 2,3$\times$ tham số cùng $\approx$8,5 epoch warmup
-	      trước khi học thực sự. Ở quy mô này, thiên kiến quy nạp tuần tự của
-	      LSTM vẫn ``mua'' được gần trọn những gì attention đa đầu phải học từ
-	      dữ liệu; bài học là lựa chọn kiến trúc phải đặt trong ngân sách
-	      dữ liệu--tham số--lịch huấn luyện, không có người thắng tuyệt đối.
+	      đầu --- val loss thấp nhất và CIDEr một lần chạy cao nhất (0,587,
+	      beam 3) --- nhưng mục~\ref{sec:ext} cho thấy nó cũng \emph{không}
+	      thắng: qua 3 seed, CIDEr của hai kiến trúc không phân biệt được,
+	      LSTM còn vượt có ý nghĩa ở ROUGE-L/BLEU-4, trong khi Transformer trả
+	      giá 2,3$\times$ tham số, nhiễu seed gấp đôi, và $\approx$8,5 epoch
+	      warmup (dù sweep warmup xác nhận rút ngắn lịch cũng không đổi kết
+	      quả). Ở quy mô này, thiên kiến quy nạp tuần tự của LSTM vẫn ``mua''
+	      được gần trọn những gì attention đa đầu phải học từ dữ liệu; bài học
+	      là lựa chọn kiến trúc phải đặt trong ngân sách dữ liệu--tham
+	      số--lịch huấn luyện, không có người thắng tuyệt đối.
 	\item \textbf{Attention đóng góp gì:} tắt attention làm CIDEr greedy giảm
 	      10,5\% (0,536 $\to$ 0,485) --- khoảng cách lớn nhất giữa hai mô hình
 	      cùng họ trong bảng chính, lớn hơn cả khác biệt LSTM/Transformer ---
