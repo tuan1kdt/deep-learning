@@ -37,7 +37,9 @@ class LSTMDecoder(nn.Module):
         # thay vì ln(V)≈7.8 — phát hiện qua smoke run). Init std=0.02 kiểu GPT.
         nn.init.normal_(self.embedding.weight, mean=0.0, std=0.02)
         with torch.no_grad():
-            self.embedding.weight[0].zero_()  # giữ hàng padding_idx=0 bằng 0
+            # zero hàng pad TẠI INIT (khi train, gradient qua fc tied vẫn làm
+            # nó trôi nhẹ — vô hại vì loss ignore_index=0)
+            self.embedding.weight[0].zero_()
         self.attention = BahdanauAttention(d_model, attn_dim) if use_attention else None
         # input mỗi bước = [embedding từ trước ; context ảnh] → 2*d_model
         self.cell = nn.LSTMCell(2 * d_model, d_model)

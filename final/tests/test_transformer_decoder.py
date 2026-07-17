@@ -37,6 +37,15 @@ def test_tie_weight():
     assert dec.fc.weight is dec.embedding.weight
 
 
+def test_embedding_init_nho_khi_tie_weight():
+    """Regression: init N(0,1) mặc định + final LayerNorm làm logits có
+    std ~ sqrt(d_model) → CE ban đầu ~267 — phải init std=0.02 kiểu GPT."""
+    dec = _decoder()
+    assert dec.embedding.weight.std().item() < 0.1  # ~1.0 nếu init mặc định
+    assert dec.embedding.weight[0].abs().sum().item() == 0.0  # hàng pad = 0 tại init
+    assert dec.pos_embedding.weight.std().item() < 0.1
+
+
 def test_qua_max_len_bi_chan():
     import pytest
     dec = _decoder()   # max_len=10

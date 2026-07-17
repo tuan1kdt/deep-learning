@@ -40,3 +40,12 @@ def test_tie_weight_embedding_va_output():
     dec = LSTMDecoder(vocab_size=V, d_model=D, attn_dim=8, dropout=0.0,
                       use_attention=True)
     assert dec.fc.weight is dec.embedding.weight
+
+
+def test_embedding_init_nho_khi_tie_weight():
+    """Regression: init N(0,1) mặc định làm CE ban đầu nổ (~267 với tie
+    weight) — embedding phải được init std=0.02 kiểu GPT."""
+    dec = LSTMDecoder(vocab_size=V, d_model=D, attn_dim=8, dropout=0.0,
+                      use_attention=True)
+    assert dec.embedding.weight.std().item() < 0.1  # ~1.0 nếu init mặc định
+    assert dec.embedding.weight[0].abs().sum().item() == 0.0  # hàng pad = 0 tại init
