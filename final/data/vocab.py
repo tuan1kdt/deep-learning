@@ -67,7 +67,12 @@ def build_vocab(all_captions: list[str], min_freq: int) -> Vocab:
 
 
 def main() -> None:
-    cfg = Config()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", default="flickr8k",
+                        choices=["flickr8k", "flickr30k"])
+    args = parser.parse_args()
+    cfg = Config(dataset=args.dataset)
     caps_nested = json.loads(cfg.captions_path("train").read_text())
     flat = [c for group in caps_nested for c in group]
     vocab = build_vocab(flat, cfg.min_word_freq)

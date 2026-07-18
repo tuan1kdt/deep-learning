@@ -41,3 +41,33 @@ def test_decoder_khong_hop_le_bi_chan():
     import pytest
     with pytest.raises(AssertionError):
         Config(decoder="rnn")
+
+
+def test_dataset_flickr30k_di_cay_thu_muc_rieng():
+    """Flickr30k phải trỏ vào data30k/ để không đè artifact Flickr8k."""
+    cfg = Config(dataset="flickr30k")
+    assert cfg.hf_dataset == "nlphuji/flickr30k"
+    assert cfg.data_root.endswith("data30k")
+    assert cfg.dataset_dir.endswith("data30k/flickr30k")
+    assert cfg.vocab_path.endswith("data30k/vocab.json")
+    assert cfg.features_path("train").parent.name == "data30k"
+    # Mặc định flickr8k giữ nguyên đường dẫn cũ (tương thích artifact đã có)
+    old = Config()
+    assert old.hf_dataset == "jxie/flickr8k"
+    assert old.data_root.endswith("data")
+    assert old.dataset_dir.endswith("data/flickr8k")
+
+
+def test_encoder_r101_doi_ten_file_feature():
+    """resnet101 dùng hậu tố _r101; resnet50 giữ tên cũ."""
+    assert Config().features_path("train").name == "features_train.pt"
+    assert (Config(encoder="resnet101").features_path("train").name
+            == "features_train_r101.pt")
+
+
+def test_dataset_encoder_khong_hop_le_bi_chan():
+    import pytest
+    with pytest.raises(AssertionError):
+        Config(dataset="coco")
+    with pytest.raises(AssertionError):
+        Config(encoder="vit")

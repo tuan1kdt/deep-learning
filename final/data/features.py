@@ -1,19 +1,22 @@
-"""Precompute feature ảnh MỘT LẦN: ResNet-50 frozen → 49 vùng × 2048-d, fp16.
+"""Precompute feature ảnh MỘT LẦN: ResNet-50/101 frozen → 49 vùng × 2048-d, fp16.
 
 Đây là quyết định hạ tầng quan trọng nhất của đồ án: sau bước này mọi thí
 nghiệm chỉ train decoder trên tensor có sẵn — epoch tính bằng giây/phút,
 smoke chạy được trên Mac, Colab rớt session không mất gì (file nằm trên đĩa).
 Đánh đổi: không augmentation được (ghi vào mục hạn chế của báo cáo).
 
-Chạy: .venv/bin/python -m final.data.features
+Chạy: .venv/bin/python -m final.data.features [--dataset flickr30k] [--encoder resnet101]
 """
+import argparse
+
 import torch
 from torch import nn
 from torchvision import transforms
-from torchvision.models import ResNet50_Weights, resnet50
+from torchvision.models import (ResNet50_Weights, ResNet101_Weights,
+                                resnet50, resnet101)
 
 from final.config import Config, pick_device
-from final.data.download import SPLITS, load_flickr8k
+from final.data.download import SPLITS, load_captioning_dataset
 
 # Chuẩn hóa ImageNet — bắt buộc khớp với phân phối ResNet được pretrain
 _MEAN, _STD = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
@@ -28,11 +31,15 @@ def make_transform():
     ])
 
 
-def build_backbone() -> nn.Module:
-    """ResNet-50 bỏ avgpool+fc → giữ bản đồ không gian 7×7×2048.
+def build_backbone(encoder: str = "resnet50") -> nn.Module:
+    """ResNet-50/101 bỏ avgpool+fc → giữ bản đồ không gian 7×7×2048 (hai kiến
+    trúc cùng số kênh layer4 nên decoder không cần đổi gì).
     Encoder chỉ chạy inference một lần nên ghim eval vĩnh viễn — không có
     chuyện BatchNorm trôi như đã phải xử lý ở midterm."""
-    backbone = resnet50(weights=ResNet50_Weights.DEFAULT)
+    if encoder == "resnet101":
+        backbone = resnet101(weights=ResNet101_Weights.DEFAULT)
+    else:
+        backbone = resnet50(weights=ResNet50_Weights.DEFAULT)
     model = nn.Sequential(*list(backbone.children())[:-2])
     model.eval()
     for p in model.parameters():
@@ -47,10 +54,16 @@ def pool_to_regions(fmap: torch.Tensor) -> torch.Tensor:
 
 
 def main() -> None:
-    cfg = Config()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", default="flickr8k",
+                        choices=["flickr8k", "flickr30k"])
+    parser.add_argument("--encoder", default="resnet50",
+                        choices=["resnet50", "resnet101"])
+    args = parser.parse_args()
+    cfg = Config(dataset=args.dataset, encoder=args.encoder)
     device = pick_device()
-    ds = load_flickr8k(cfg)
-    model = build_backbone().to(device)
+    ds = load_captioning_dataset(cfg)
+    model = build_backbone(cfg.encoder).to(device)
     tf = make_transform()
 
     for split in SPLITS:

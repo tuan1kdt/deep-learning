@@ -16,13 +16,21 @@ _AUTO_LR = {"lstm": 3e-4, "transformer": 1e-4}
 _AUTO_WARMUP = {"lstm": 0, "transformer": 2000}
 
 
+# Thí nghiệm mở rộng "quy mô dữ liệu": Flickr30k dùng cây thư mục riêng
+# (data30k/) để không đụng artifact Flickr8k; đường dẫn suy trong __post_init__.
+_HF_DATASETS = {"flickr8k": "jxie/flickr8k", "flickr30k": "nlphuji/flickr30k"}
+_DATA_DIRNAME = {"flickr8k": "data", "flickr30k": "data30k"}
+
+
 @dataclass
 class Config:
     # ----- Data -----
-    hf_dataset: str = "jxie/flickr8k"
-    dataset_dir: str = str(FINAL_DIR / "data" / "flickr8k")
-    data_root: str = str(FINAL_DIR / "data")
-    vocab_path: str = str(FINAL_DIR / "data" / "vocab.json")
+    dataset: str = "flickr8k"   # flickr8k | flickr30k (thí nghiệm quy mô dữ liệu)
+    encoder: str = "resnet50"   # resnet50 | resnet101 (cùng 2048-d, 7x7)
+    hf_dataset: str = ""        # "" = auto theo dataset
+    dataset_dir: str = ""
+    data_root: str = ""
+    vocab_path: str = ""
     min_word_freq: int = 5
     max_words: int = 20         # số từ tối đa của caption (chưa tính bos/eos)
 
@@ -60,6 +68,17 @@ class Config:
 
     def __post_init__(self):
         assert self.decoder in ("lstm", "transformer")
+        assert self.dataset in _HF_DATASETS
+        assert self.encoder in ("resnet50", "resnet101")
+        root = FINAL_DIR / _DATA_DIRNAME[self.dataset]
+        if not self.hf_dataset:
+            self.hf_dataset = _HF_DATASETS[self.dataset]
+        if not self.data_root:
+            self.data_root = str(root)
+        if not self.dataset_dir:
+            self.dataset_dir = str(root / self.dataset)
+        if not self.vocab_path:
+            self.vocab_path = str(root / "vocab.json")
         if self.lr == 0.0:
             self.lr = _AUTO_LR[self.decoder]
         if self.warmup_steps < 0:
@@ -74,7 +93,10 @@ class Config:
         return self.max_words + 2
 
     def features_path(self, split: str) -> Path:
-        return Path(self.data_root) / f"features_{split}.pt"
+        # Feature theo encoder nằm cạnh nhau, hậu tố phân biệt — resnet50 giữ
+        # tên cũ để tương thích artifact đã precompute.
+        sfx = "" if self.encoder == "resnet50" else "_r101"
+        return Path(self.data_root) / f"features_{split}{sfx}.pt"
 
     def captions_path(self, split: str) -> Path:
         return Path(self.data_root) / f"captions_{split}.json"

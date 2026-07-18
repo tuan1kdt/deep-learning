@@ -192,6 +192,12 @@ def main() -> None:
     parser.add_argument("--no-attention", action="store_true",
                         help="LSTM dùng mean-pool thay attention (ablation #2)")
     parser.add_argument("--run-name", default="")
+    parser.add_argument("--dataset", default="flickr8k",
+                        choices=["flickr8k", "flickr30k"],
+                        help="thí nghiệm quy mô dữ liệu (flickr30k = 31k ảnh)")
+    parser.add_argument("--encoder", default="resnet50",
+                        choices=["resnet50", "resnet101"],
+                        help="feature encoder đã precompute (ablation encoder)")
     parser.add_argument("--seed", type=int, default=42,
                         help="đổi seed cho thí nghiệm mean±std đa seed")
     parser.add_argument("--warmup", type=int, default=-1,
@@ -205,7 +211,8 @@ def main() -> None:
     run_name = args.run_name or (f"{default_name}_smoke" if args.smoke
                                  else default_name)
     cfg = Config(decoder=args.decoder, use_attention=use_attention,
-                 run_name=run_name, seed=args.seed, warmup_steps=args.warmup)
+                 run_name=run_name, seed=args.seed, warmup_steps=args.warmup,
+                 dataset=args.dataset, encoder=args.encoder)
     if args.smoke:
         cfg.batch_size = 64
         cfg.num_workers = 0

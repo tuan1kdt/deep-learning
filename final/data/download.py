@@ -1,12 +1,15 @@
-"""Tải Flickr8k từ HF về đĩa + trích caption ra JSON nhẹ.
+"""Tải Flickr8k/Flickr30k từ HF về đĩa + trích caption ra JSON nhẹ.
 
-Nguồn: jxie/flickr8k — mirror nhiều lượt tải nhất, ĐÃ chia sẵn Karpathy split
-(train 6000 / validation 1000 / test 1000, mỗi ảnh 5 caption). Nhờ vậy không
-phải tự xử lý dataset_flickr8k.json như phương án fallback trong spec.
+Nguồn Flickr8k: jxie/flickr8k — mirror nhiều lượt tải nhất, ĐÃ chia sẵn
+Karpathy split (train 6000 / validation 1000 / test 1000, mỗi ảnh 5 caption,
+5 cột caption_0..4). Nguồn Flickr30k: nlphuji/flickr30k — MỘT split duy nhất
+với cột `split` (train/val/test, Karpathy) và cột `caption` là list 5 câu;
+ta tự tách thành DatasetDict 3 split cùng khuôn với Flickr8k.
 
-Chạy: .venv/bin/python -m final.data.download
+Chạy: .venv/bin/python -m final.data.download [--dataset flickr30k]
 Idempotent: đã có trên đĩa thì chỉ in thống kê rồi thoát.
 """
+import argparse
 import json
 from pathlib import Path
 
@@ -18,30 +21,52 @@ SPLITS = ("train", "validation", "test")
 CAPTION_KEYS = tuple(f"caption_{i}" for i in range(5))
 
 
-def load_flickr8k(cfg: Config) -> DatasetDict:
+def load_captioning_dataset(cfg: Config) -> DatasetDict:
     """Trả về DatasetDict 3 split; tải + save_to_disk nếu chưa có."""
     ds_dir = Path(cfg.dataset_dir)
     if (ds_dir / "dataset_dict.json").exists():
         return load_from_disk(str(ds_dir))
-    ds = load_dataset(cfg.hf_dataset)
+    if cfg.dataset == "flickr30k":
+        raw = load_dataset(cfg.hf_dataset, split="test")  # tên split gốc là "test"
+        # input_columns=["split"] để filter chỉ đọc cột text, không decode ảnh
+        ds = DatasetDict({
+            name: raw.filter(lambda s: s == src, input_columns=["split"])
+            for name, src in
+            (("train", "train"), ("validation", "val"), ("test", "test"))
+        })
+    else:
+        ds = load_dataset(cfg.hf_dataset)
     ds.save_to_disk(str(ds_dir))
     return ds
 
 
+# Giữ tên cũ cho tương thích các import hiện có
+load_flickr8k = load_captioning_dataset
+
+
 def extract_captions(rows) -> list[list[str]]:
     """[[5 caption thô của ảnh 0], [5 caption của ảnh 1], ...] — index là
-    thứ tự ảnh trong split, mọi artifact sau (features, refs) đều căn theo đó."""
+    thứ tự ảnh trong split, mọi artifact sau (features, refs) đều căn theo đó.
+    Hai schema: cột `caption` là list (flickr30k) hoặc 5 cột caption_i (flickr8k)."""
+    if len(rows) and "caption" in rows[0]:
+        return [list(row["caption"]) for row in rows]
     return [[row[k] for k in CAPTION_KEYS] for row in rows]
 
 
 def main() -> None:
-    cfg = Config()
-    ds = load_flickr8k(cfg)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dataset", default="flickr8k",
+                        choices=["flickr8k", "flickr30k"])
+    args = parser.parse_args()
+    cfg = Config(dataset=args.dataset)
+    ds = load_captioning_dataset(cfg)
     for split in SPLITS:
         out = cfg.captions_path(split)
         if not out.exists():
             # .select_columns tránh decode cột ảnh (nặng) khi chỉ cần text
-            caps = extract_captions(ds[split].select_columns(list(CAPTION_KEYS)))
+            cap_cols = (["caption"] if "caption" in ds[split].column_names
+                        else list(CAPTION_KEYS))
+            caps = extract_captions(ds[split].select_columns(cap_cols))
             out.parent.mkdir(parents=True, exist_ok=True)
             out.write_text(json.dumps(caps, ensure_ascii=False))
         n = len(json.loads(out.read_text()))

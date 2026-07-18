@@ -30,8 +30,10 @@ def load_model_from_checkpoint(path, device):
     # Checkpoint có thể được rsync từ máy khác (vd. trainbox) sang máy này —
     # các đường dẫn tuyệt đối (vocab_path, data_root, ...) đã bake vào lúc
     # train chỉ đúng trên máy đó. Chỉ giữ lại siêu tham số (kiến trúc, lr,
-    # ...) từ checkpoint; đường dẫn luôn lấy theo máy hiện tại (FINAL_DIR).
-    fresh = Config()
+    # ...) từ checkpoint; đường dẫn luôn lấy theo máy hiện tại (FINAL_DIR),
+    # nhưng phải giữ đúng dataset/encoder để trỏ vào cây artifact tương ứng.
+    fresh = Config(dataset=getattr(cfg, "dataset", "flickr8k"),
+                   encoder=getattr(cfg, "encoder", "resnet50"))
     for field in ("vocab_path", "data_root", "dataset_dir",
                   "output_dir", "checkpoint_dir"):
         setattr(cfg, field, getattr(fresh, field))
