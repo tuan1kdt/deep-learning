@@ -83,8 +83,17 @@ def score_captions(gts, res):
 
 @torch.no_grad()
 def beam_generate(vlm, pixel_values, prompt_ids, beam_size=3, max_new=40,
-                  eos_id=0):
+                  eos_id=0, length_penalty=0.7):
+    """Beam search với length normalization (Wu et al. 2016 dạng đơn giản):
+    điểm mỗi beam chia cho (số token sinh)^length_penalty, tránh thiên vị
+    câu ngắn khi beam_size > 1 (log-prob cộng dồn luôn <= 0 nên câu dài hơn
+    bị phạt nặng hơn nếu không chuẩn hóa)."""
     assert pixel_values.size(0) == 1, "beam search chạy từng ảnh"
+    P = prompt_ids.size(1)
+
+    def norm_score(b):
+        return b[1] / (max(1, b[0].size(1) - P) ** length_penalty)
+
     beams = [(prompt_ids, 0.0, False)]
     for _ in range(max_new):
         cand = []
@@ -99,10 +108,10 @@ def beam_generate(vlm, pixel_values, prompt_ids, beam_size=3, max_new=40,
             for v, i in zip(top.values, top.indices):
                 nids = torch.cat([ids, i.view(1, 1)], dim=1)
                 cand.append((nids, lp + v.item(), i.item() == eos_id))
-        beams = sorted(cand, key=lambda b: -b[1])[:beam_size]
+        beams = sorted(cand, key=lambda b: -norm_score(b))[:beam_size]
         if all(b[2] for b in beams):
             break
-    return beams[0][0][:, prompt_ids.size(1):]
+    return max(beams, key=norm_score)[0][:, P:]
 
 
 def eval_captions(vlm, tok, jsonl_path, img_root, device, prompt=None,
@@ -114,8 +123,8 @@ def eval_captions(vlm, tok, jsonl_path, img_root, device, prompt=None,
     gts, res, preds = {}, {}, []
     vlm.eval()
     for i, r in enumerate(recs):
-        px = preprocess_image(
-            Image.open(f"{img_root}/{r['image']}")).unsqueeze(0).to(device)
+        with Image.open(f"{img_root}/{r['image']}") as im:
+            px = preprocess_image(im).unsqueeze(0).to(device)
         p = prompt if prompt is not None else r["prompt"]
         ids = torch.tensor([tok.encode(f"<|user|> {p} <|assistant|>").ids],
                            device=device)

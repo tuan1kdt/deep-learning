@@ -3,7 +3,6 @@
 Gom 2x2 patch lân cận thành 1 token (channel x4) — giảm 4 lần chi phí attention
 cho token ảnh mà không vứt thông tin (nanoVLM/InternVL cùng cách).
 """
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 

@@ -22,7 +22,7 @@ def _h(uid):
     return int(hashlib.md5(uid.encode()).hexdigest(), 16)
 
 
-def _caption_rows(hf_split, source, img_dir, rel_prefix):
+def _caption_rows(hf_split, source, img_dir):
     """UIT-ViIC / KTVIC: image_uid + image(PIL) + caption_vi(list[str])."""
     rows, refs = [], []
     for ex in hf_split:
@@ -50,8 +50,9 @@ def _vivqa_rows(json_path, img_zip, out_img_dir, rel_dirname):
     fmap = {}
     for root, _, files in os.walk(dest):
         for f in files:
-            fmap[f] = os.path.relpath(os.path.join(root, f),
-                                      os.path.dirname(out_img_dir))
+            # path lưu PHẢI tương đối với out_img_dir (== img_root lúc load);
+            # dùng dirname(out_img_dir) sẽ thừa 1 cấp "sft/" -> FileNotFound.
+            fmap[f] = os.path.relpath(os.path.join(root, f), out_img_dir)
     rows = []
     for a in ann["annotations"].values():
         fname = ann["images"][str(a["image_id"])]
@@ -80,14 +81,10 @@ def main():
 
     viic = load_dataset("ai-enthusiasm-community/UIT-ViIC")
     ktvic = load_dataset("ai-enthusiasm-community/KTVIC")
-    tr_viic, tr_viic_refs = _caption_rows(viic["train"], "viic", img_dir,
-                                          args.out)
-    te_viic_rows, te_viic_refs = _caption_rows(viic["validation"], "viic",
-                                               img_dir, args.out)
-    tr_ktvic, tr_ktvic_refs = _caption_rows(ktvic["train"], "ktvic",
-                                            img_dir, args.out)
-    te_ktvic_rows, te_ktvic_refs = _caption_rows(ktvic["test"], "ktvic",
-                                                 img_dir, args.out)
+    tr_viic, tr_viic_refs = _caption_rows(viic["train"], "viic", img_dir)
+    _, te_viic_refs = _caption_rows(viic["validation"], "viic", img_dir)
+    tr_ktvic, tr_ktvic_refs = _caption_rows(ktvic["train"], "ktvic", img_dir)
+    _, te_ktvic_refs = _caption_rows(ktvic["test"], "ktvic", img_dir)
 
     vqa_train = _vivqa_rows(
         hf_hub_download("uitnlp/OpenViVQA-dataset", "vlsp2023_train_data.json",
