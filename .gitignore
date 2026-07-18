@@ -45,3 +45,9 @@ final/data/captions_*.json
 final/data/vocab.json
 final/checkpoints/
 final/outputs/
+
+# ViVLM-nano project artifacts
+vivlm/data/bin/
+vivlm/data/sft/
+vivlm/checkpoints/
+vivlm/outputs/
