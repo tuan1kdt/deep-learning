@@ -27,7 +27,16 @@ def load_captioning_dataset(cfg: Config) -> DatasetDict:
     if (ds_dir / "dataset_dict.json").exists():
         return load_from_disk(str(ds_dir))
     if cfg.dataset == "flickr30k":
-        raw = load_dataset(cfg.hf_dataset, split="test")  # tên split gốc là "test"
+        # nlphuji/flickr30k là dataset dạng script — datasets>=3 bỏ hỗ trợ,
+        # nên đọc thẳng bản parquet HF tự convert (revision refs/convert/parquet;
+        # toàn bộ nằm trong config TEST / split test, builder parquet đặt tên
+        # split mặc định là "train").
+        raw = load_dataset(
+            "parquet",
+            data_files="hf://datasets/nlphuji/flickr30k@refs/convert/parquet"
+                       "/TEST/test/*.parquet",
+            split="train",
+        )
         # input_columns=["split"] để filter chỉ đọc cột text, không decode ảnh
         ds = DatasetDict({
             name: raw.filter(lambda s: s == src, input_columns=["split"])
