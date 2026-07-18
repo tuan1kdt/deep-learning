@@ -1,0 +1,97 @@
+% Mượn từ template 01_Report_CD1_DistillationLaw (TDTU), chuyển sang tiếng Việt:
+% T5 fontenc + babel vietnamese thay cho T1 + english.
+\usepackage[fontsize=13]{scrextend}
+\usepackage[T5]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english,vietnamese]{babel} % vietnamese cuối = ngôn ngữ chính; english cho biblatex
+\AtBeginDocument{
+    \renewcommand{\chaptername}{CHƯƠNG}
+    \renewcommand{\figurename}{Hình}
+    \renewcommand{\tablename}{Bảng}
+    \renewcommand{\contentsname}{MỤC LỤC}
+    \renewcommand{\listfigurename}{DANH MỤC HÌNH VẼ}
+    \renewcommand{\listtablename}{DANH MỤC BẢNG}
+    \renewcommand{\bibname}{TÀI LIỆU THAM KHẢO}
+}
+\usepackage[left=3.5cm, right=2cm, top=3.5cm, bottom=3cm]{geometry}
+\usepackage{graphicx,float}
+\usepackage{array,tabularx}
+\usepackage{mathtools}
+\usepackage{amssymb,amsmath}
+\usepackage{mathptmx}
+\usepackage[varvw]{newtxmath}
+\usepackage{multicol}
+\usepackage{xcolor}
+\usepackage{titlesec,titletoc}
+\titleformat{\chapter}[hang]{\bfseries\fontsize{16}{19}\selectfont\raggedright}{\chaptername\ \thechapter}{1ex}{\MakeUppercase}
+\titlespacing*{\chapter}{0pt}{40pt}{20pt}
+\titleformat{\section}[hang]{\bfseries\fontsize{14}{17}\selectfont\color{black}}{\thesection}{1.5ex}{}
+\titlespacing*{\section}{0pt}{12pt}{6pt}
+\titleformat{\subsection}[hang]{\bfseries\itshape\fontsize{14}{17}\selectfont\color{black}}{\thesubsection}{1.5ex}{}
+\titlespacing*{\subsection}{0pt}{10pt}{4pt}
+\titleformat{\subsubsection}[hang]{\mdseries\fontsize{14}{17}\selectfont\color{black}}{\thesubsubsection}{1.5ex}{}
+\titlespacing*{\subsubsection}{0pt}{8pt}{4pt}
+
+\titlecontents{chapter}[0pt]{\bfseries\color{black}}{\chaptername\ \thecontentslabel\quad}{}{\normalfont\dotfill\bfseries\contentspage}
+\titlecontents{section}[2.5ex]{\color{black}}{ \thecontentslabel\quad}{}{\dotfill\contentspage}
+\titlecontents{subsection}[5ex]{\color{black}}{ \thecontentslabel\quad}{}{\dotfill\contentspage}
+\titlecontents{subsubsection}[7.5ex]{\color{black}}{ \thecontentslabel\quad}{}{\dotfill\contentspage}
+\titlecontents{figure}[0pt]{\color{black}}{\figurename\ \thecontentslabel:\quad}{}{\dotfill\contentspage}
+\titlecontents{table}[0pt]{\color{black}}{\tablename\ \thecontentslabel:\quad}{}{\dotfill\contentspage}
+
+\usepackage{enumitem}
+\newlist{abbrv}{itemize}{1}
+\setlist[abbrv,1]{label=,labelwidth=1in,align=parleft,itemsep=0.1\baselineskip,leftmargin=!}
+
+\usepackage{csquotes}
+\DeclareQuoteAlias{english}{vietnamese} % csquotes không có style vietnamese → mượn english
+% style=apa của template gốc không có localization tiếng Việt (lỗi \datecircaprint)
+% → dùng numeric (chuẩn báo cáo kỹ thuật), vẫn backend biber.
+% language=english: biblatex không có localization tiếng Việt — tài liệu tham khảo
+% toàn bài báo tiếng Anh nên dùng chuỗi tiếng Anh (tránh lỗi "?Title?" / "andothers").
+\usepackage[style=numeric,sorting=nyt,backend=biber,language=english,autolang=none]{biblatex}
+% biblatex không có vietnamese.lbx — map về english.lbx để các chuỗi (and, pages, In:)
+% và dấu ngoặc kép tiêu đề hiển thị đúng.
+\DeclareLanguageMapping{vietnamese}{english}
+\addbibresource{references.bib}\usepackage{hyperref}
+\hypersetup{
+	colorlinks=true,
+	linkcolor=black,
+	citecolor=red,
+	urlcolor=black,
+	hypertexnames=false
+}
+
+\usepackage{indentfirst}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{3}
+\renewcommand{\baselinestretch}{1.5}
+\setlength{\parindent}{1.27cm}
+\allowdisplaybreaks
+\emergencystretch=3em
+\tolerance=2000
+\hbadness=10000
+
+\usepackage[labelfont=bf]{caption}
+\numberwithin{figure}{chapter}
+\numberwithin{table}{chapter}
+
+\usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric,calc}
+\usepackage{fancyhdr}
+\setlength{\headheight}{15.6pt}
+\pagestyle{fancyplain}
+\fancypagestyle{plain}{
+    \fancyhf{}
+    \fancyhead[C]{\thepage}
+    \renewcommand{\headrulewidth}{0pt}
+}
+
+% Ô placeholder cho hình/số liệu chưa có (điền sau khi train xong)
+\newcommand{\placeholderfig}[2]{%
+  \begin{tikzpicture}
+    \node[draw, dashed, minimum width=#1, minimum height=#2, align=center,
+          fill=gray!5, text=gray]{[Hình sẽ bổ sung sau khi train]\\ \small kết quả thật từ vivlm/outputs/};
+  \end{tikzpicture}}
+\newcommand{\TBD}{\textcolor{gray}{---}}

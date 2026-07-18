@@ -1,0 +1,37 @@
+\chapter*{TÓM TẮT}
+\addcontentsline{toc}{chapter}{TÓM TẮT}
+
+Báo cáo này xây dựng \textbf{ViVLM-nano} --- một mô hình ngôn ngữ--thị giác
+(vision--language model, VLM) tiếng Việt cỡ nhỏ mà \emph{toàn bộ phần ngôn ngữ
+được tiền huấn luyện từ token đầu tiên}, thay vì mượn một mô hình ngôn ngữ huấn
+luyện sẵn như các VLM tiếng Việt hiện có (LaVy, Vintern-1B). Hệ thống đi trọn
+vòng đời huấn luyện của một mô hình sinh hiện đại trên đúng một GPU 24\,GB:
+(i)~\emph{tiền huấn luyện} một mô hình decoder-only 101 triệu tham số kiến trúc
+Llama-style (RoPE, RMSNorm, SwiGLU) trên 3,02 tỷ token tiếng Việt lọc chất lượng
+từ FineWeb2-HQ, với bộ tách từ BPE 20.480 mục tự huấn luyện;
+(ii)~\emph{hợp nhất thị giác} kiểu LLaVA: bộ mã hóa SigLIP đóng băng, 196 patch
+được nén còn 49 token ảnh bằng pixel-shuffle rồi chiếu vào không gian embedding
+của mô hình ngôn ngữ, tinh chỉnh có giám sát (SFT) hai pha trên khoảng 77 nghìn
+mẫu mô tả ảnh và hỏi--đáp tiếng Việt (UIT-ViIC, KTVIC, OpenViVQA) với loss chỉ
+tính trên phần trả lời; (iii)~\emph{học tăng cường} SCST tối ưu trực tiếp CIDEr
+với baseline là chính mô hình giải mã tham lam.
+
+Về đo lường, chất lượng ngôn ngữ được theo dõi bằng perplexity và
+bits-per-character (thước đo trung lập với bộ tách từ, cho phép so sánh công bằng
+với baseline GPT-2 tiếng Việt huấn luyện sẵn); chất lượng đa phương thức đo bằng
+BLEU-4 và CIDEr trên các tập kiểm tra UIT-ViIC, KTVIC và OpenViVQA; hiệu quả của
+bộ tách từ đo bằng fertility so với tokenizer của PhoGPT và GPT-2. Toàn bộ pipeline
+được phát triển kiểu test-driven với 52 unit test chạy ngoại tuyến, checkpoint
+khôi phục chính xác từng bit, và nhật ký GPU ghi mỗi 30 giây làm bằng chứng sử
+dụng tài nguyên: giai đoạn tiền huấn luyện duy trì mức sử dụng GPU xấp xỉ 100\%
+và 22,2/24,5\,GB VRAM (91\%) với thông lượng ổn định 99--100 nghìn token/giây
+nhờ \texttt{bfloat16}, FlashAttention và \texttt{torch.compile}
+(so với 34 nghìn token/giây và tràn bộ nhớ ở chế độ eager).
+Kết quả định lượng đầy đủ (perplexity, fertility, CIDEr trước/sau SCST) được
+trình bày trong chương 4. Cùng với đồ án giữa kỳ (Medical VQA --- nhánh phân
+loại) và đồ án cuối kỳ sinh mô tả ảnh (nhánh sinh có điều kiện), báo cáo này
+lấp phần còn lại của sơ đồ đa phương thức tổng quát của môn học: hợp nhất hai
+luồng token thị giác--ngôn ngữ và chuỗi huấn luyện pretrain--SFT--RL.
+
+\textbf{Từ khóa:} mô hình ngôn ngữ, tiền huấn luyện, VLM, tiếng Việt, SFT, SCST, BPE.
+\clearpage

@@ -1,0 +1,241 @@
+\chapter{CƠ SỞ LÝ THUYẾT}
+\label{chap:background}
+
+\section{Mô hình ngôn ngữ tự hồi quy}
+\label{sec:bg-lm}
+
+Một mô hình ngôn ngữ (LM) gán xác suất cho chuỗi token $x_{1:T}$ bằng phân rã
+tự hồi quy:
+\begin{equation}
+	p_\theta(x_{1:T}) = \prod_{t=1}^{T} p_\theta(x_t \mid x_{<t}),
+	\label{eq:autoregressive}
+\end{equation}
+tức toàn bộ việc ``hiểu ngôn ngữ'' được quy về một bài toán duy nhất:
+\emph{dự đoán token kế tiếp}. Huấn luyện tối thiểu hóa cross-entropy trên
+từng vị trí:
+\begin{equation}
+	\mathcal{L}(\theta) = -\frac{1}{T}\sum_{t=1}^{T} \log p_\theta(x_t \mid x_{<t}).
+	\label{eq:ce}
+\end{equation}
+Điểm đáng chú ý về mặt sư phạm: công thức~\eqref{eq:ce} \emph{trùng khớp} với
+loss của decoder sinh mô tả ảnh ở đồ án cuối kỳ --- chỉ khác là ở đó điều kiện
+$x_{<t}$ được nối thêm đặc trưng ảnh. Mô hình ngôn ngữ vì vậy có thể xem là
+``captioning bỏ điều kiện ảnh, phóng đại dữ liệu lên nghìn lần''; và ngược
+lại, VLM ở chương~\ref{chap:methods} chính là mô hình ngôn ngữ \emph{thêm lại}
+điều kiện ảnh.
+
+Hai thước đo chất lượng nội tại được dùng trong báo cáo. \textbf{Perplexity}
+$\mathrm{PPL} = \exp(\mathcal{L})$ đo mức ``bối rối'' trung bình trên mỗi
+token; tuy nhiên PPL phụ thuộc bộ tách từ: cùng một đoạn văn, tokenizer cắt
+càng thô (ít token hơn) thì mỗi token càng khó đoán, PPL càng cao một cách tự
+nhiên, nên \emph{không thể so PPL giữa hai mô hình dùng hai tokenizer khác
+nhau}. Vì vậy khi so với baseline, báo cáo dùng \textbf{bits-per-character}:
+\begin{equation}
+	\mathrm{BPC} = \frac{\sum_t -\log_2 p_\theta(x_t \mid x_{<t})}{\text{số ký tự của văn bản}},
+	\label{eq:bpc}
+\end{equation}
+tổng lượng thông tin (bit) mô hình cần để nén văn bản, chia cho độ dài
+\emph{ký tự} --- đại lượng trung lập với mọi cách tách token.
+
+\section{Kiến trúc decoder-only hiện đại}
+\label{sec:bg-arch}
+
+\subsection{Khối transformer và attention nhân quả}
+
+Mô hình trong báo cáo là transformer decoder-only
+\autocite{vaswani2017attention,radford2019gpt2}: $L$ khối xếp chồng, mỗi khối
+gồm self-attention đa đầu và mạng truyền thẳng (FFN), nối tắt phần dư và chuẩn
+hóa pre-norm. Self-attention tính
+$\mathrm{softmax}(QK^\top/\sqrt{d_k})V$ với mặt nạ \emph{nhân quả} chặn mọi vị
+trí tương lai, bảo đảm tính tự hồi quy của~\eqref{eq:autoregressive}. Cài đặt
+dùng \texttt{scaled\_dot\_product\_attention} của PyTorch, tự kích hoạt nhân
+FlashAttention \autocite{dao2022flashattention} --- tính attention chính xác
+nhưng không ghi ma trận $T \times T$ ra bộ nhớ, yếu tố quyết định để đẩy
+kích thước batch lên cao trong 24\,GB VRAM.
+
+\subsection{Ba nâng cấp Llama-style so với GPT-2}
+
+So với GPT-2 nguyên bản, kiến trúc trong báo cáo theo ``chuẩn thực hành''
+hiện nay (LLaMA \autocite{touvron2023llama} và hầu hết mô hình mở sau nó),
+khác ở ba điểm, tóm tắt trong bảng~\ref{tab:gpt2-vs-llama}.
+
+\begin{table}[H]
+	\centering
+	\caption{Ba khác biệt kiến trúc giữa GPT-2 nguyên bản và Llama-style.}
+	\label{tab:gpt2-vs-llama}
+	\begin{tabularx}{\textwidth}{lXX}
+		\hline
+		\textbf{Thành phần} & \textbf{GPT-2} & \textbf{Llama-style (báo cáo này)} \\
+		\hline
+		Mã hóa vị trí & Embedding vị trí học được, cộng vào đầu vào & RoPE: xoay từng cặp chiều của $Q,K$ một góc tỷ lệ vị trí \\
+		Chuẩn hóa & LayerNorm (trừ trung bình, có bias) & RMSNorm: chỉ chia RMS, không trừ trung bình, không bias \\
+		FFN & Hai lớp tuyến tính với GELU & SwiGLU: cổng nhân điểm $\mathrm{SiLU}(xW_1)\odot xW_3$ rồi chiếu xuống \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\textbf{RoPE} \autocite{su2024rope} chia mỗi vector query/key thành các cặp
+chiều $(2i, 2i{+}1)$ và xoay cặp thứ $i$ tại vị trí $t$ một góc
+$t\,\omega_i$:
+\begin{equation}
+	\begin{pmatrix} q'_{2i} \\ q'_{2i+1} \end{pmatrix}
+	= \begin{pmatrix} \cos t\omega_i & -\sin t\omega_i \\ \sin t\omega_i & \cos t\omega_i \end{pmatrix}
+	  \begin{pmatrix} q_{2i} \\ q_{2i+1} \end{pmatrix},
+	\qquad \omega_i = \theta^{-2i/d},\ \theta = 10^4.
+	\label{eq:rope}
+\end{equation}
+Vì tích vô hướng giữa hai vector đã xoay chỉ phụ thuộc \emph{hiệu} hai góc,
+attention nhìn thấy vị trí \emph{tương đối} $t - s$ thay vì tuyệt đối --- một
+tiên nghiệm đúng với ngôn ngữ hơn embedding vị trí học được, lại không tốn
+tham số. Phép xoay bảo toàn chuẩn vector (một bất biến được unit test khóa
+trong mã nguồn).
+
+\textbf{RMSNorm} \autocite{zhang2019rmsnorm} bỏ bước trừ trung bình của
+LayerNorm, chỉ giữ $x / \sqrt{\tfrac{1}{d}\sum_j x_j^2 + \epsilon} \cdot g$:
+rẻ hơn, ít tham số hơn (không bias), thực nghiệm cho chất lượng tương đương.
+\textbf{SwiGLU} \autocite{shazeer2020glu} thay FFN hai lớp bằng ba ma trận với
+cổng nhân: phần cổng $\mathrm{SiLU}(xW_1)$ điều tiết theo từng chiều lượng
+thông tin đi qua $xW_3$, cho chất lượng tốt hơn trên cùng ngân sách FLOP; để
+giữ tổng tham số tương đương, chiều ẩn giảm từ $4d$ xuống $\approx \tfrac{8}{3}d$.
+
+Cuối cùng, \textbf{trói trọng số} (weight tying): ma trận embedding
+$E \in \mathbb{R}^{|V| \times d}$ được dùng lại làm lớp chiếu đầu ra
+($\mathrm{logits} = hE^\top$), tiết kiệm $|V| \times d$ tham số --- đáng kể ở
+quy mô nhỏ, nơi embedding chiếm tỷ trọng lớn.
+
+\section{Tách từ BPE và độ phì (fertility)}
+\label{sec:bg-bpe}
+
+Byte-Pair Encoding \autocite{sennrich2016bpe} khởi đầu từ bảng chữ cái và lặp
+việc gộp cặp ký hiệu liền kề xuất hiện nhiều nhất thành mục từ vựng mới, đến
+khi đạt kích thước từ vựng định trước. Biến thể \emph{byte-level} (GPT-2 và
+báo cáo này) làm việc trên byte UTF-8 thay vì ký tự: mọi ký tự --- kể cả chữ
+có dấu tiếng Việt như ``ắ'', ``ễ'' --- luôn phân rã được về byte, nên không
+bao giờ xuất hiện token \texttt{<unk>}.
+
+Hiệu quả của tokenizer đối với một ngôn ngữ được đo bằng \textbf{fertility}:
+số token trung bình cần để mã hóa một từ. Fertility thấp nghĩa là chuỗi ngắn
+hơn --- mô hình ``nhìn'' được ngữ cảnh dài hơn trong cùng cửa sổ, sinh nhanh
+hơn, mỗi token mang nhiều nghĩa hơn. Một tokenizer huấn luyện trên tiếng Anh
+(GPT-2) sẽ băm nát từ tiếng Việt có dấu thành nhiều mảnh byte; đây là lý do
+báo cáo tự huấn luyện BPE 20.480 mục trên chính corpus tiếng Việt --- cùng
+kích thước từ vựng với PhoGPT \autocite{nguyen2023phogpt} để so sánh trực
+tiếp. Từ vựng nhỏ (20K thay vì 50K của GPT-2) còn có lợi ở quy mô nano:
+embedding chỉ chiếm 15,7M thay vì 38M tham số, dành dung lượng cho các tầng
+transformer.
+
+\section{Quy luật scaling và điểm tối ưu tính toán}
+\label{sec:bg-scaling}
+
+Loss tiền huấn luyện giảm theo quy luật lũy thừa theo cả kích thước mô hình
+lẫn lượng dữ liệu \autocite{kaplan2020scaling}. Với ngân sách tính toán cố
+định, Chinchilla \autocite{hoffmann2022chinchilla} chỉ ra tỷ lệ tối ưu xấp xỉ
+\emph{20 token dữ liệu cho mỗi tham số}. Mô hình 101M tham số của báo cáo do
+đó ứng với điểm tối ưu $\approx 2$ tỷ token; lượng dữ liệu thực dùng (3,02 tỷ
+token, $\approx 30$ token/tham số) chủ đích nằm \emph{quá} điểm Chinchilla ---
+hợp lý khi mô hình (chứ không phải ngân sách huấn luyện) là thứ được giữ lại
+dùng tiếp cho các giai đoạn sau, tương tự xu hướng ``over-train'' các mô hình
+nhỏ thực dụng.
+
+\section{Hợp nhất thị giác kiểu LLaVA}
+\label{sec:bg-fusion}
+
+\subsection{Bộ mã hóa thị giác tiền huấn luyện tương phản}
+
+CLIP \autocite{radford2021clip} huấn luyện song song một bộ mã hóa ảnh và một
+bộ mã hóa văn bản sao cho ảnh và mô tả đúng của nó có biểu diễn gần nhau
+(học tương phản); kết quả là đặc trưng ảnh ``đã ngấm'' ngữ nghĩa ngôn ngữ ---
+nền tảng cho hầu hết VLM. SigLIP \autocite{zhai2023siglip} thay softmax toàn
+batch bằng loss sigmoid từng cặp, huấn luyện ổn định hơn; biến thể SigLIP-B/16
+dùng trong báo cáo là một Vision Transformer \autocite{dosovitskiy2021vit}
+chia ảnh $224 \times 224$ thành $14 \times 14 = 196$ patch, mỗi patch một
+vector 768 chiều.
+
+\subsection{Ghép token ảnh vào mô hình ngôn ngữ}
+
+LLaVA \autocite{liu2023llava} chứng minh một cách hợp nhất tối giản mà hiệu
+quả: chiếu các patch ảnh qua một MLP nhỏ (projector) vào đúng không gian
+embedding của LLM, rồi \emph{ghép trước} (prepend) chuỗi token ảnh vào chuỗi
+token văn bản. Từ đó self-attention của LLM tự nhiên attend chéo giữa từ và
+vùng ảnh --- không cần khối cross-attention riêng như kiến trúc
+encoder--decoder của đồ án cuối kỳ. Khối ``fusion'' trong sơ đồ của môn học,
+theo cách nhìn này, chính là các tầng transformer sẵn có của mô hình ngôn ngữ.
+
+Chi phí attention tỷ lệ bình phương độ dài chuỗi, nên số token ảnh đáng được
+tiết kiệm. Kỹ thuật \emph{pixel-shuffle} (InternVL \autocite{chen2024internvl},
+nanoVLM \autocite{wiedmann2025nanovlm}) gộp mỗi khối $2 \times 2$ patch lân
+cận thành một token với số chiều gấp 4 ($196 \to 49$ token, $768 \to 3072$
+chiều), giữ nguyên thông tin nhưng giảm 4 lần chi phí attention cho phần ảnh;
+projector sau đó chiếu 3072 chiều về đúng chiều $d$ của mô hình ngôn ngữ.
+
+\section{Tinh chỉnh có giám sát và che loss}
+\label{sec:bg-sft}
+
+Mô hình sau tiền huấn luyện chỉ biết \emph{tiếp tục} văn bản, chưa biết
+\emph{trả lời}. SFT dạy định dạng hội thoại bằng chính loss
+next-token~\eqref{eq:ce} trên dữ liệu có cấu trúc
+``\texttt{<|user|>} câu hỏi \texttt{<|assistant|>} câu trả lời'', với một
+điểm mấu chốt: \textbf{che loss} (loss masking) --- các vị trí thuộc phần
+prompt (và token ảnh) bị gán nhãn bỏ qua, gradient chỉ chảy từ phần trả lời.
+Mô hình vì vậy học ``khi thấy câu hỏi thì sinh câu trả lời'' chứ không học
+thuộc lòng câu hỏi. Đây là khái niệm mà đồ án cuối kỳ chưa chạm tới (ở đó
+toàn bộ caption là mục tiêu học), và là mảnh ghép ``SFT'' trong sơ đồ của
+môn học.
+
+\section{Học tăng cường cho sinh chuỗi: SCST}
+\label{sec:bg-scst}
+
+Các thước đo sinh chuỗi (CIDEr \autocite{vedantam2015cider}, BLEU
+\autocite{papineni2002bleu}) không khả vi, nên không đưa thẳng vào~\eqref{eq:ce}
+được. REINFORCE \autocite{williams1992reinforce} cho phép tối ưu kỳ vọng phần
+thưởng $r$ của chuỗi lấy mẫu $w^s \sim p_\theta$:
+\begin{equation}
+	\nabla_\theta \mathbb{E}[r] \approx (r(w^s) - b)\,\nabla_\theta \log p_\theta(w^s),
+	\label{eq:reinforce}
+\end{equation}
+với baseline $b$ để giảm phương sai. SCST \autocite{rennie2017scst} chọn
+baseline là phần thưởng của chính mô hình khi giải mã tham lam $\hat{w}$:
+$b = r(\hat{w})$ --- mẫu ngẫu nhiên nào tốt hơn ``chính mình lúc nghiêm túc''
+thì được tăng xác suất, kém hơn thì bị giảm. Đồ án cuối kỳ đã kiểm chứng SCST
+trên captioning tiếng Anh; báo cáo này tái sử dụng đúng thuật toán nhưng áp
+lên VLM tự pretrain, khép mảnh ``RL'' trong sơ đồ.
+
+\section{Công trình liên quan và vị trí của đề tài}
+\label{sec:bg-related}
+
+\textbf{Huấn luyện GPT tối giản.} nanoGPT \autocite{karpathy2022nanogpt} là
+tham chiếu chuẩn cho tiền huấn luyện GPT quy mô nhỏ (kiến trúc, siêu tham số,
+memmap dữ liệu); báo cáo kế thừa tinh thần tối giản này nhưng chuyển sang
+kiến trúc Llama-style và tiếng Việt. Với tiếng Việt,
+NlpHUST/gpt2-vietnamese \autocite{nlphust2021gpt2vi} (GPT-2 huấn luyện trên
+tin tức) được dùng làm baseline BPC, còn PhoGPT-4B \autocite{nguyen2023phogpt}
+--- tiền huấn luyện từ đầu 3,7B tham số trên cụm nhiều GPU --- là mốc trên
+tham khảo và nguồn đối chứng thiết kế tokenizer.
+
+\textbf{VLM nhỏ và VLM tiếng Việt.} nanoVLM \autocite{wiedmann2025nanovlm}
+(SigLIP-85M + SmolLM2-135M, 222M tham số) là tiền lệ gần nhất về kiến trúc và
+quy mô, nhưng \emph{mượn} LLM tiếng Anh huấn luyện sẵn. LaVy
+\autocite{tran2024lavy} và Vintern-1B \autocite{doan2024vintern} là các VLM
+tiếng Việt công bố sớm, đều xây trên LLM đa ngôn ngữ tỷ tham số. Bảng
+\ref{tab:related} định vị ViVLM-nano: khoảng trống mà đề tài nhắm tới là tổ
+hợp \emph{tự pretrain phần ngôn ngữ} + \emph{tiếng Việt} + \emph{trọn pipeline
+ba giai đoạn} + \emph{một GPU}.
+
+\begin{table}[H]
+	\centering
+	\caption{ViVLM-nano so với các hệ liên quan.}
+	\label{tab:related}
+	\small
+	\begin{tabularx}{\textwidth}{lXccc}
+		\hline
+		\textbf{Hệ} & \textbf{Phần ngôn ngữ} & \textbf{T.Việt} & \textbf{Thị giác} & \textbf{RL} \\
+		\hline
+		nanoGPT & tự pretrain (tiếng Anh) & --- & --- & --- \\
+		NlpHUST GPT-2 & tự pretrain & \checkmark & --- & --- \\
+		PhoGPT-4B & tự pretrain (3,7B, đa GPU) & \checkmark & --- & --- \\
+		nanoVLM & SmolLM2 huấn luyện sẵn & --- & \checkmark & --- \\
+		LaVy / Vintern-1B & LLM tỷ tham số sẵn & \checkmark & \checkmark & --- \\
+		\textbf{ViVLM-nano} & \textbf{tự pretrain (101M, 1 GPU)} & \checkmark & \checkmark & \checkmark \\
+		\hline
+	\end{tabularx}
+\end{table}

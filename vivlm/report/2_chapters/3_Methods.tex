@@ -1,0 +1,254 @@
+\chapter{PHƯƠNG PHÁP}
+\label{chap:methods}
+
+\section{Tổng quan pipeline ba giai đoạn}
+\label{sec:met-overview}
+
+Hình~\ref{fig:pipeline} tóm tắt toàn bộ hệ thống. Giai đoạn A tiền huấn luyện
+mô hình ngôn ngữ \textbf{ViGPT-nano} (101M tham số) trên 3,02 tỷ token tiếng
+Việt. Giai đoạn B ghép bộ mã hóa thị giác SigLIP đóng băng qua projector
+pixel-shuffle và tinh chỉnh có giám sát hai pha trên dữ liệu mô tả ảnh --
+hỏi--đáp tiếng Việt. Giai đoạn C tinh chỉnh học tăng cường SCST với phần
+thưởng CIDEr. Mỗi giai đoạn tạo một checkpoint độc lập
+(\texttt{vigpt-base} $\to$ \texttt{vivlm-sft} $\to$ \texttt{vivlm-scst}),
+cho phép đánh giá tách bạch đóng góp của từng bước.
+
+\begin{figure}[H]
+	\centering
+	\begin{tikzpicture}[
+		node distance=4mm and 6mm, font=\small,
+		box/.style={draw, rounded corners=2pt, align=center, minimum height=9mm, inner sep=5pt},
+		data/.style={box, fill=gray!10},
+		model/.style={box, fill=blue!8},
+		stage/.style={font=\bfseries\small}
+	]
+		\node[data] (fw) {FineWeb2-HQ \texttt{vie\_Latn}\\ 3{,}02 tỷ token};
+		\node[model, right=of fw] (gpt) {ViGPT-nano 101M\\ (12 tầng Llama-style)};
+		\node[data, right=of gpt] (sft) {UIT-ViIC + KTVIC\\ + OpenViVQA ($\approx$77k mẫu)};
+		\node[model, right=of sft] (vlm) {ViVLM-nano\\ (+SigLIP, +projector)};
+		\draw[-{Stealth}] (fw) -- node[above, stage] {A} (gpt);
+		\draw[-{Stealth}] (gpt) -- node[above, stage] {B} (sft);
+		\draw[-{Stealth}] (sft) -- node[above, stage] {C: SCST} (vlm);
+	\end{tikzpicture}
+	\caption{Pipeline ba giai đoạn: (A) tiền huấn luyện ngôn ngữ, (B) hợp nhất
+	thị giác + SFT, (C) học tăng cường SCST.}
+	\label{fig:pipeline}
+\end{figure}
+
+\section{Dữ liệu tiền huấn luyện}
+\label{sec:met-pretrain-data}
+
+Corpus lấy từ \textbf{FineWeb2-HQ} \autocite{messmer2025fineweb2hq} --- phân
+tập tiếng Việt (\texttt{vie\_Latn}) đã lọc chất lượng bằng mô hình từ FineWeb2
+\autocite{penedo2024fineweb}, tổng 63\,GB dạng parquet. Pipeline chuẩn bị dữ
+liệu tải \emph{tuần tự từng file đến khi đủ chỉ tiêu token} (thay vì cố định
+số file, vì mỗi file parquet chứa kèm cột embedding rất nặng khiến dung lượng
+không tỷ lệ với lượng văn bản): 54 file đầu cho ra tập huấn luyện, file kế
+tiếp --- không giao với tập huấn luyện --- cho tập kiểm định
+(bảng~\ref{tab:pretrain-data}). Mỗi văn bản được mã hóa BPE rồi kết thúc bằng
+token \texttt{<|endoftext|>}, ghi nối tiếp vào một file nhị phân
+\texttt{uint16} (từ vựng 20.480 $<$ 65.536 nên 2 byte/token là đủ). Khi huấn
+luyện, dữ liệu được đọc bằng \texttt{numpy.memmap} và lấy mẫu cửa sổ ngẫu
+nhiên 1.024 token --- không nạp 6\,GB vào RAM, không nghẽn CPU.
+
+\begin{table}[H]
+	\centering
+	\caption{Thống kê dữ liệu tiền huấn luyện.}
+	\label{tab:pretrain-data}
+	\begin{tabular}{lr}
+		\hline
+		Nguồn & FineWeb2-HQ \texttt{vie\_Latn} (54 + 1 file parquet) \\
+		Token huấn luyện & 3.019.000.000 (6,0\,GB uint16) \\
+		Token kiểm định & 30.600.000 (59\,MB, file riêng --- không rò rỉ) \\
+		Cửa sổ ngữ cảnh & 1.024 token \\
+		Phân cách văn bản & \texttt{<|endoftext|>} sau mỗi tài liệu \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Bộ tách từ}
+\label{sec:met-tokenizer}
+
+Bộ tách từ là BPE byte-level 20.480 mục, tự huấn luyện bằng thư viện
+\texttt{tokenizers} trên $\approx$0,35\,GB văn bản trích từ file parquet đầu
+tiên (đủ để ước lượng thống kê cặp byte của tiếngng Việt web). Bốn token đặc
+biệt chiếm cố định các id 0--3: \texttt{<|endoftext|>} (kết thúc/phân cách),
+\texttt{<|user|>}, \texttt{<|assistant|>} (định dạng hội thoại cho SFT) và
+\texttt{<|image|>} (dự phòng). Kích thước 20.480 trùng với PhoGPT
+\autocite{nguyen2023phogpt} để so sánh fertility trực tiếp
+(mục~\ref{sec:exp-tokenizer}).
+
+\section{Kiến trúc ViGPT-nano}
+\label{sec:met-arch}
+
+ViGPT-nano là transformer decoder-only Llama-style cài đặt từ đầu bằng
+PyTorch (không dùng \texttt{nn.TransformerDecoder} hay thư viện
+\texttt{transformers}), cấu hình ở bảng~\ref{tab:arch}. Mỗi khối:
+pre-RMSNorm $\to$ self-attention đa đầu (RoPE trên $Q,K$, mặt nạ nhân quả,
+FlashAttention) $\to$ cộng phần dư $\to$ pre-RMSNorm $\to$ SwiGLU $\to$ cộng
+phần dư. Trọng số khởi tạo $\mathcal{N}(0, 0{,}02^2)$; riêng các lớp chiếu
+cuối nhánh phần dư nhân thêm $1/\sqrt{2L}$ theo GPT-2
+\autocite{radford2019gpt2} để phương sai tín hiệu không phình theo độ sâu.
+Embedding trói trọng số với lớp đầu ra.
+
+\begin{table}[H]
+	\centering
+	\caption{Cấu hình ViGPT-nano và phân bổ tham số.}
+	\label{tab:arch}
+	\begin{tabular}{lr|lr}
+		\hline
+		Số tầng $L$ & 12 & Embedding (trói với đầu ra) & 15,73M \\
+		Chiều ẩn $d$ & 768 & Attention ($12 \times 2{,}36$M) & 28,3M \\
+		Số đầu attention & 12 (mỗi đầu 64 chiều) & SwiGLU ($12 \times 4{,}72$M) & 56,6M \\
+		Chiều ẩn SwiGLU & 2.048 & RMSNorm (25 lớp) & 0,02M \\
+		Ngữ cảnh & 1.024 & & \\
+		Từ vựng & 20.480 & \textbf{Tổng} & \textbf{100.682.496} \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Cấu hình tiền huấn luyện (giai đoạn A)}
+\label{sec:met-pretrain}
+
+Bảng~\ref{tab:pretrain-hp} liệt kê siêu tham số. Batch hiệu dụng 491.520
+token/bước đạt bằng tích lũy gradient: 40 chuỗi $\times$ 1.024 token
+$\times$ 12 lần tích lũy; kích thước micro-batch 40 được chọn bằng đo đạc
+thực nghiệm để lấp 91\% VRAM (mục~\ref{sec:exp-gpu}). 6.000 bước tương ứng
+$\approx$2,95 tỷ token ($\approx$0,98 epoch --- mỗi mẫu chỉ được thấy xấp xỉ
+một lần). Toàn bộ chạy \texttt{bfloat16} (autocast) với
+\texttt{torch.compile} \autocite{ansel2024pytorch2}.
+
+\begin{table}[H]
+	\centering
+	\caption{Siêu tham số tiền huấn luyện.}
+	\label{tab:pretrain-hp}
+	\begin{tabular}{ll}
+		\hline
+		Optimizer & AdamW \autocite{loshchilov2019adamw}, $\beta = (0{,}9;\ 0{,}95)$, weight decay 0,1 \\
+		 & (decay chỉ áp lên tham số $\ge$2 chiều; norm/bias miễn) \\
+		Lịch học & warmup tuyến tính 500 bước $\to$ đỉnh $6 \cdot 10^{-4}$ $\to$ cosine về $6 \cdot 10^{-5}$ \\
+		Batch & micro 40 $\times$ ctx 1.024 $\times$ accum 12 = 491.520 token/bước \\
+		Số bước & 6.000 ($\approx$2,95 tỷ token $\approx$ 0,98 epoch) \\
+		Gradient clipping & chuẩn toàn cục 1,0 \\
+		Độ chính xác & bfloat16 autocast + FlashAttention + \texttt{torch.compile} \\
+		Đánh giá / checkpoint & val mỗi 250 bước (50 batch cố định); checkpoint mỗi 500 bước \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Vì phiên huấn luyện kéo dài nhiều giờ trên hạ tầng từ xa, tính
+\textbf{khôi phục chính xác} được thiết kế và kiểm thử tường minh: checkpoint
+lưu đủ trọng số, trạng thái optimizer, bước hiện tại và \emph{mọi trạng thái
+sinh số ngẫu nhiên} (bộ sinh lấy mẫu dữ liệu, RNG của PyTorch trên CPU lẫn
+GPU). Unit test khóa bất biến ``huấn luyện 6 bước liền mạch $=$ huấn luyện 3
+bước + khôi phục + 3 bước'' chính xác đến từng bit trọng số. Một lỗi thực tế
+đáng ghi nhận: tensor trạng thái RNG bị \texttt{map\_location} đưa lên GPU khi
+nạp checkpoint, trong khi API khôi phục đòi hỏi tensor CPU --- lỗi chỉ phát lộ
+trên máy GPU, được vá và khóa bằng test riêng.
+
+\section{Hợp nhất thị giác và SFT (giai đoạn B)}
+\label{sec:met-fusion}
+
+\subsection{Kiến trúc hợp nhất}
+
+Ảnh $224 \times 224$ qua SigLIP-B/16 \emph{đóng băng} cho 196 patch 768
+chiều. Pixel-shuffle gộp $2 \times 2$ patch thành một token 3.072 chiều
+($196 \to 49$ token), rồi projector hai lớp
+($3.072 \to 768$, SiLU, $768 \to 768$) chiếu vào không gian embedding của
+ViGPT-nano. Chuỗi đầu vào cuối cùng là
+$[\,49 \text{ token ảnh};\ \text{token văn bản}\,]$ --- các tầng transformer
+sẵn có đảm nhiệm hợp nhất, đúng tinh thần LLaVA (mục~\ref{sec:bg-fusion}).
+
+\begin{figure}[H]
+	\centering
+	\begin{tikzpicture}[
+		node distance=3mm and 5mm, font=\small,
+		box/.style={draw, rounded corners=2pt, align=center, minimum height=8mm, inner sep=4pt},
+		frozen/.style={box, fill=cyan!8},
+		train/.style={box, fill=orange!12}
+	]
+		\node[frozen] (sig) {SigLIP-B/16 (đóng băng)\\ ảnh $\to 196 \times 768$};
+		\node[train, right=of sig] (proj) {pixel-shuffle $196{\to}49$\\ + MLP $3072{\to}768$};
+		\node[train, right=of proj] (gpt) {ViGPT-nano\\ 12 tầng};
+		\node[below=6mm of gpt, box, fill=gray!10] (txt) {\texttt{<|user|>} Ảnh có gì? \texttt{<|assistant|>} \ldots};
+		\draw[-{Stealth}] (sig) -- (proj);
+		\draw[-{Stealth}] (proj) -- node[above]{ghép trước} (gpt);
+		\draw[-{Stealth}] (txt) -- (gpt);
+	\end{tikzpicture}
+	\caption{Hợp nhất kiểu LLaVA: token ảnh (nén 4 lần bằng pixel-shuffle)
+	ghép trước chuỗi token văn bản; chỉ projector và ViGPT-nano được huấn luyện.}
+	\label{fig:fusion}
+\end{figure}
+
+\subsection{Dữ liệu SFT}
+
+Ba nguồn tiếng Việt được chuẩn hóa về một định dạng thống nhất
+(ảnh, câu lệnh, câu trả lời), tổng $\approx$77 nghìn mẫu
+(bảng~\ref{tab:sft-data}); 2\% tách làm tập kiểm định theo băm định danh
+\emph{ảnh} (mọi mẫu của cùng một ảnh nằm cùng phía, tránh rò rỉ). Với dữ liệu
+mô tả ảnh, câu lệnh được đa dạng hóa từ 5 mẫu câu (``Mô tả bức ảnh.'', ``Ảnh
+này có gì?''\ldots) chọn tất định theo băm, tránh mô hình học vẹt một câu lệnh
+duy nhất. Chuỗi huấn luyện theo định dạng
+\texttt{<|user|>}~$q$~\texttt{<|assistant|>}~$a$~\texttt{<|endoftext|>}; nhãn
+bị che ($-100$) trên toàn bộ 49 token ảnh và phần câu lệnh --- gradient chỉ
+đến từ câu trả lời (mục~\ref{sec:bg-sft}).
+
+\begin{table}[H]
+	\centering
+	\caption{Ba nguồn dữ liệu SFT tiếng Việt.}
+	\label{tab:sft-data}
+	\begin{tabularx}{\textwidth}{lXrr}
+		\hline
+		\textbf{Bộ} & \textbf{Miền} & \textbf{Ảnh} & \textbf{Mẫu} \\
+		\hline
+		UIT-ViIC \autocite{lam2020viic} & thể thao (ảnh COCO), mô tả & $\approx$3,8k & $\approx$19k \\
+		KTVIC \autocite{pham2024ktvic} & đời sống hằng ngày, mô tả & $\approx$4,3k & $\approx$21k \\
+		OpenViVQA \autocite{nguyen2023openvivqa} & hỏi--đáp mở (VLSP 2023) & $\approx$11k & $\approx$37k \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\subsection{Huấn luyện hai pha}
+
+Pha 1 (\emph{làm nóng projector}): đóng băng toàn bộ ViGPT-nano, chỉ huấn
+luyện projector 500 bước với learning rate $10^{-3}$ --- cho projector ``bắt
+sóng'' không gian embedding trước, tránh gradient hỗn loạn từ một projector
+khởi tạo ngẫu nhiên phá hỏng phần ngôn ngữ đã pretrain. Pha 2 (\emph{toàn
+phần}): mở khóa ViGPT-nano + projector (SigLIP vẫn đóng băng), 2 epoch với
+learning rate $10^{-4}$ cosine về $10^{-5}$, micro-batch 24, tích lũy 4,
+độ dài văn bản tối đa 256 token.
+
+\section{Học tăng cường SCST (giai đoạn C)}
+\label{sec:met-scst}
+
+Từ checkpoint SFT, mỗi bước SCST lấy 32 ảnh từ nguồn dữ liệu mô tả (kèm các
+câu tham chiếu), giải mã hai lần dưới \texttt{no\_grad}: tham lam
+($\hat{w}$, baseline) và lấy mẫu ($w^s$, nhiệt độ 1,0); phần thưởng là CIDEr
+từng ảnh. Log-xác suất của chuỗi lấy mẫu sau đó được tính lại bằng \emph{một}
+lượt truyền teacher-forcing có gradient (thay vì giữ đồ thị tính toán qua 40
+bước giải mã --- tiết kiệm bộ nhớ tương đương một bước huấn luyện thường), và
+loss là
+\begin{equation}
+	\mathcal{L}_{\mathrm{SCST}} = -\bigl(r(w^s) - r(\hat{w})\bigr) \sum_{t} \log p_\theta(w^s_t \mid w^s_{<t}, I),
+	\label{eq:scst-loss}
+\end{equation}
+với mặt nạ cắt tại \texttt{<|endoftext|>} đầu tiên của từng chuỗi trong
+batch. Chạy 400 bước, learning rate $10^{-5}$, tối đa 40 token sinh mới.
+
+\section{Hạ tầng, kiểm thử và đo đạc}
+\label{sec:met-infra}
+
+Toàn bộ huấn luyện chạy trên một máy trạm từ xa: GPU NVIDIA RTX PRO 4000
+Blackwell 24\,GB, 24 lõi CPU, 31\,GB RAM, môi trường WSL2 (Ubuntu trên
+Windows), PyTorch 2.11/CUDA 12.8; phiên dài chạy trong \texttt{tmux} để sống
+sót qua đứt kết nối SSH. Phát triển và kiểm thử trên máy cá nhân không GPU:
+\textbf{52 unit test} chạy ngoại tuyến (mô hình thu nhỏ, bộ mã hóa thị giác
+giả lập, dữ liệu tự sinh) khóa các bất biến quan trọng --- RoPE bảo toàn
+chuẩn, mặt nạ nhân quả, đếm đúng 100.682.496 tham số, trói trọng số, che nhãn
+SFT đúng vị trí, khôi phục checkpoint chính xác từng bit, căn chỉnh
+log-xác suất SCST qua 49 token ảnh, và một test hồi quy cho lỗi đường dẫn ảnh
+phát hiện khi rà soát chéo. Suốt quá trình huấn luyện, một tiến trình phụ ghi
+mức sử dụng GPU và VRAM mỗi 30 giây (\texttt{nvidia-smi}) --- nguồn số liệu
+cho phân tích hiệu suất ở mục~\ref{sec:exp-gpu}. Khi đánh giá sinh chuỗi bằng
+beam search, điểm mỗi beam được chuẩn hóa theo độ dài (mũ 0,7) để tránh thiên
+vị câu ngắn.

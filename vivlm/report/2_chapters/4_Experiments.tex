@@ -1,0 +1,226 @@
+\chapter{THỰC NGHIỆM VÀ KẾT QUẢ}
+\label{chap:experiments}
+
+\section{Thiết lập và thước đo}
+\label{sec:exp-setup}
+
+Mọi thí nghiệm chạy trên máy trạm mô tả ở mục~\ref{sec:met-infra}. Chất lượng
+ngôn ngữ nội tại đo bằng loss/PPL trên tập kiểm định 30,6M token (cửa sổ tuần
+tự, không lấy mẫu ngẫu nhiên) và BPC~\eqref{eq:bpc} khi so với baseline khác
+tokenizer. Chất lượng đa phương thức đo bằng BLEU-4 và CIDEr
+(\texttt{pycocoevalcap}) trên các tập kiểm tra UIT-ViIC, KTVIC (mô tả ảnh, 5
+câu tham chiếu mỗi ảnh) và OpenViVQA (hỏi--đáp; dùng phân tập dev vì phân tập
+test của cuộc thi VLSP không công bố đáp án); văn bản chuẩn hóa chữ thường và
+khoảng trắng trước khi chấm --- nhất quán cho mọi hệ được so sánh. Giải mã so
+sánh giữa tham lam và beam search $k{=}3$ (chuẩn hóa độ dài mũ 0,7).
+
+\textbf{Ghi chú trạng thái.} Tại thời điểm chốt bản thảo này, giai đoạn tiền
+huấn luyện đang chạy (đã qua $1/10$ lịch trình); các ô đánh dấu \TBD{} và
+hình placeholder sẽ được điền từ \texttt{vivlm/outputs/} ngay khi các giai
+đoạn hoàn tất, không thay đổi cấu trúc báo cáo.
+
+\section{Kết quả tiền huấn luyện}
+\label{sec:exp-pretrain}
+
+\subsection{Đường cong học}
+
+Hình~\ref{fig:pretrain-loss} trình bày loss huấn luyện và kiểm định theo số
+bước. Ba quan sát định lượng ở giai đoạn đã chạy: (i)~loss khởi điểm 10,09
+khớp giá trị lý thuyết của phân phối đều trên từ vựng
+($\ln 20.480 = 9{,}93$ cộng nhiễu khởi tạo) --- một phép ``sanity check'' cho
+cài đặt; (ii)~loss rơi rất nhanh trong nghìn bước đầu (val 4,37 tại bước 250;
+3,63 tại bước 500) rồi chuyển sang pha giảm chậm dạng lũy thừa đúng như quy
+luật scaling (mục~\ref{sec:bg-scaling}); (iii)~val bám sát train --- mô hình
+101M trên 3 tỷ token nằm sâu trong chế độ thiếu dữ liệu hơn là quá khớp, đúng
+kỳ vọng khi mỗi mẫu chỉ được thấy một lần.
+
+\begin{figure}[H]
+	\centering
+	\placeholderfig{12cm}{6.5cm}
+	\caption{Loss huấn luyện (đường liền) và kiểm định (điểm) theo số bước,
+	6.000 bước $\approx$ 2,95 tỷ token. Nguồn: \texttt{pretrain\_log.csv}.}
+	\label{fig:pretrain-loss}
+\end{figure}
+
+\begin{table}[H]
+	\centering
+	\caption{Chất lượng ngôn ngữ nội tại của ViGPT-nano sau tiền huấn luyện,
+	so với baseline GPT-2 tiếng Việt huấn luyện sẵn. PPL không so được giữa hai
+	tokenizer khác nhau nên cột so sánh dùng BPC (mục~\ref{sec:bg-lm}).}
+	\label{tab:ppl-bpc}
+	\begin{tabular}{lccc}
+		\hline
+		\textbf{Mô hình} & \textbf{Tham số} & \textbf{PPL (val)} & \textbf{BPC} \\
+		\hline
+		ViGPT-nano (đề tài) & 101M & \TBD & \TBD \\
+		NlpHUST/gpt2-vietnamese \autocite{nlphust2021gpt2vi} & 124M & (khác tokenizer) & \TBD \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\subsection{Chất lượng định tính}
+
+Bảng~\ref{tab:samples} liệt kê văn bản mô hình sinh (top-$p$ 0,9) từ vài câu
+mồi tiếng Việt. Kỳ vọng đặt đúng quy mô: mô hình 101M huấn luyện 3 tỷ token
+viết được câu đúng ngữ pháp, mạch lạc cục bộ, nhưng kiến thức thế giới còn
+nông --- ``đúng dáng văn, ngây ngô nội dung'' là mức chuẩn của lớp mô hình
+nano (so sánh: nanoVLM \autocite{wiedmann2025nanovlm} chọn backbone SmolLM2
+135M huấn luyện tới 2.000 tỷ token).
+
+\begin{table}[H]
+	\centering
+	\caption{Mẫu văn bản sinh từ ViGPT-nano (top-$p = 0{,}9$).}
+	\label{tab:samples}
+	\begin{tabularx}{\textwidth}{lX}
+		\hline
+		\textbf{Câu mồi} & \textbf{Văn bản sinh (trích)} \\
+		\hline
+		``Hà Nội là'' & \TBD \\
+		``Trí tuệ nhân tạo'' & \TBD \\
+		``Món phở'' & \TBD \\
+		\hline
+	\end{tabularx}
+\end{table}
+
+\section{Hiệu quả bộ tách từ}
+\label{sec:exp-tokenizer}
+
+Bảng~\ref{tab:fertility} so sánh fertility trên cùng một mẫu văn bản tiếng
+Việt giữ lại từ corpus. Hai giả thuyết cần kiểm chứng: (i)~tokenizer tự huấn
+luyện đạt fertility xấp xỉ PhoGPT (cùng cỡ từ vựng, cùng byte-level, khác
+dữ liệu huấn luyện); (ii)~tokenizer GPT-2 tiếng Anh chịu fertility cao hơn
+hẳn do phải phân rã ký tự có dấu về byte.
+
+\begin{table}[H]
+	\centering
+	\caption{Fertility (token/từ, thấp hơn là tốt hơn) trên cùng văn bản tiếng Việt.}
+	\label{tab:fertility}
+	\begin{tabular}{lcc}
+		\hline
+		\textbf{Tokenizer} & \textbf{Từ vựng} & \textbf{Fertility} \\
+		\hline
+		BPE tự huấn luyện (đề tài) & 20.480 & \TBD \\
+		PhoGPT \autocite{nguyen2023phogpt} & 20.480 & \TBD \\
+		GPT-2 (tiếng Anh) \autocite{radford2019gpt2} & 50.257 & \TBD \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Kết quả đa phương thức sau SFT}
+\label{sec:exp-sft}
+
+Bảng~\ref{tab:sft-results} tổng hợp chất lượng trên ba tập kiểm tra sau hai
+pha SFT; hình~\ref{fig:demo} minh họa định tính. Ba câu hỏi phân tích đi kèm:
+mức chênh giữa hai miền mô tả (ViIC thể thao hẹp miền so với KTVIC đời sống
+rộng miền); beam search còn giữ được biên cải thiện như ở đồ án cuối kỳ
+không; và hỏi--đáp mở --- nhiệm vụ đòi kiến thức thế giới --- kém mô tả ảnh
+bao xa ở quy mô 101M.
+
+\begin{table}[H]
+	\centering
+	\caption{Kết quả trên tập kiểm tra: mô tả ảnh (UIT-ViIC, KTVIC) và
+	hỏi--đáp (OpenViVQA dev). B-4 = BLEU-4; C = CIDEr.}
+	\label{tab:sft-results}
+	\begin{tabular}{llcccc}
+		\hline
+		\textbf{Tập} & \textbf{Checkpoint} & \textbf{B-4 (tham lam)} & \textbf{C (tham lam)} & \textbf{B-4 (beam3)} & \textbf{C (beam3)} \\
+		\hline
+		UIT-ViIC & SFT & \TBD & \TBD & \TBD & \TBD \\
+		KTVIC & SFT & \TBD & \TBD & \TBD & \TBD \\
+		OpenViVQA & SFT & \TBD & \TBD & --- & --- \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\begin{figure}[H]
+	\centering
+	\placeholderfig{13cm}{7cm}
+	\caption{Minh họa định tính: ảnh kiểm tra, câu lệnh và câu trả lời của
+	ViVLM-nano (trái: mô tả ảnh; phải: hỏi--đáp).}
+	\label{fig:demo}
+\end{figure}
+
+\section{Đóng góp của SCST}
+\label{sec:exp-scst}
+
+Bảng~\ref{tab:scst} so sánh trước/sau 400 bước SCST trên hai tập mô tả ảnh.
+Từ kinh nghiệm đồ án cuối kỳ (SCST nâng CIDEr giải mã tham lam $+0{,}010$
+đến $+0{,}013$ nhưng gần như không thêm gì khi đã dùng beam), giả thuyết đặt
+ra là hiệu ứng tương tự lặp lại trên mô hình tự pretrain --- nếu đúng, đây là
+bằng chứng SCST tác động vào \emph{chiến lược giải mã} nhiều hơn là vào
+biểu diễn của mô hình.
+
+\begin{table}[H]
+	\centering
+	\caption{CIDEr trước và sau SCST (giải mã tham lam / beam3).}
+	\label{tab:scst}
+	\begin{tabular}{lcc}
+		\hline
+		\textbf{Tập} & \textbf{SFT} & \textbf{SFT + SCST} \\
+		\hline
+		UIT-ViIC & \TBD{} / \TBD & \TBD{} / \TBD \\
+		KTVIC & \TBD{} / \TBD & \TBD{} / \TBD \\
+		\hline
+	\end{tabular}
+\end{table}
+
+\section{Hiệu suất phần cứng: sử dụng trọn một GPU 24\,GB}
+\label{sec:exp-gpu}
+
+Một mục tiêu tường minh của đề tài là \emph{dùng hết} tài nguyên máy huấn
+luyện. Bảng~\ref{tab:throughput} trình bày các đo đạc đã hoàn tất khi hiệu
+chỉnh cấu hình (mỗi dòng: 15--20 bước đo trên chính dữ liệu thật).
+
+\begin{table}[H]
+	\centering
+	\caption{Thông lượng và VRAM theo cấu hình (đo trên RTX PRO 4000 Blackwell
+	24,5\,GB; VRAM là mức cấp phát đỉnh do PyTorch báo cáo).}
+	\label{tab:throughput}
+	\begin{tabular}{lccc}
+		\hline
+		\textbf{Cấu hình} & \textbf{Token/giây} & \textbf{VRAM} & \textbf{Ghi chú} \\
+		\hline
+		Eager, micro-batch 32 & $\approx$34.000 & 26,1\,GB & tràn sang RAM hệ thống \\
+		\texttt{compile}, micro-batch 32 & 78.500 & 18,1\,GB & \\
+		\texttt{compile}, micro-batch 40 & 82.800 & 22,2\,GB (91\%) & \textbf{cấu hình chọn} \\
+		Run chính thức (ổn định) & 99.000--100.000 & 22,2\,GB & util GPU 100\% \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Ba bài học định lượng đáng ghi. \textbf{Một}, \texttt{torch.compile} không
+chỉ tăng tốc $2{,}3$ lần mà còn \emph{giảm} 30\% bộ nhớ so với eager: các
+nhân được hợp nhất (kernel fusion) bỏ được nhiều tensor trung gian; ở chế độ
+eager, cùng micro-batch 32 cần 26\,GB --- vượt VRAM vật lý, phần dôi bị đẩy
+sang RAM hệ thống qua cơ chế của WSL và kéo thông lượng xuống còn một phần
+ba. \textbf{Hai}, thông lượng \emph{tăng} theo kích thước micro-batch
+(78,5k $\to$ 82,8k khi 32 $\to$ 40): GPU càng được cho nhiều việc một lúc
+càng hiệu quả --- lập luận nền tảng của việc ``lấp đầy'' VRAM. \textbf{Ba},
+với 491.520 token/bước, 6.000 bước và $\approx$100k token/giây, giai đoạn
+tiền huấn luyện chiếm $\approx$8,5 giờ GPU thuần --- cộng các giai đoạn
+SFT/SCST và đánh giá, tổng ngân sách nằm trong một ngày GPU như thiết kế.
+
+\begin{figure}[H]
+	\centering
+	\placeholderfig{13cm}{6cm}
+	\caption{Mức sử dụng GPU (\%) và VRAM (GiB) theo thời gian, ghi mỗi 30
+	giây qua \texttt{nvidia-smi}, phủ trọn ba giai đoạn huấn luyện.}
+	\label{fig:gpu-util}
+\end{figure}
+
+Về hạ tầng, hai sự cố thực tế và cách xử lý được ghi lại làm kinh nghiệm:
+(i)~\texttt{torch.compile} sinh nhân Triton cần trình biên dịch C tại chỗ ---
+môi trường WSL tối giản không có \texttt{gcc} khiến lần chạy đầu thất bại;
+(ii)~máy ảo WSL tự tắt khi tiến trình cửa sổ cuối cùng thoát, nên mọi phiên
+huấn luyện phải chạy trong \texttt{tmux} kèm một kết nối giám sát giữ máy ảo
+sống --- kinh nghiệm kế thừa từ đồ án cuối kỳ, lần này được hệ thống hóa
+thành script khởi chạy/khôi phục tự động.
+
+\section{Bàn luận}
+\label{sec:exp-discussion}
+
+\TBD{} \emph{(Mục này tổng hợp sau khi đủ số liệu: đối chiếu bốn câu hỏi
+nghiên cứu ở mục 1.3 với kết quả các bảng \ref{tab:ppl-bpc},
+\ref{tab:fertility}, \ref{tab:sft-results}, \ref{tab:scst}; bàn về giới hạn
+của quy mô 101M đối với hỏi--đáp mở; so sánh chi phí--chất lượng với hướng
+``mượn LLM sẵn'' của LaVy/Vintern.)}

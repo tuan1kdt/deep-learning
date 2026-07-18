@@ -1,0 +1,101 @@
+\chapter{GIỚI THIỆU}
+\label{chap:intro}
+
+\section{Bài toán và động lực}
+
+Các mô hình ngôn ngữ--thị giác (vision--language model, VLM) hiện đại như GPT-4V
+hay LLaVA \autocite{liu2023llava} nhận đồng thời ảnh và văn bản, rồi sinh ra câu
+trả lời bằng ngôn ngữ tự nhiên. Chúng đều được xây theo cùng một công thức:
+lấy một mô hình ngôn ngữ lớn (LLM) đã tiền huấn luyện, ghép thêm một bộ mã hóa
+thị giác, rồi tinh chỉnh để hai phương thức ``nói chuyện'' được với nhau. Công
+thức này hiệu quả, nhưng với người học nó có một điểm mù: phần quan trọng
+nhất --- \emph{cái LLM được tiền huấn luyện ra sao} --- luôn nằm trong hộp đen
+của các tổ chức có hàng nghìn GPU.
+
+Báo cáo này lấp điểm mù đó bằng cách làm ngược lại: \textbf{tự tiền huấn luyện
+phần ngôn ngữ từ token đầu tiên}, ở quy mô mà một GPU 24\,GB xử lý được trong
+khoảng nửa ngày, rồi mới ghép thị giác và đi tiếp các bước tinh chỉnh có giám
+sát (SFT) và học tăng cường (RL). Sản phẩm là \textbf{ViVLM-nano}: một VLM
+tiếng Việt 101 triệu tham số ngôn ngữ, nhận ảnh kèm câu lệnh tiếng Việt và sinh
+mô tả hoặc câu trả lời tiếng Việt. Mọi tham số ngôn ngữ trong mô hình --- từ
+embedding đến tầng attention cuối --- đều do chính pipeline trong báo cáo này
+huấn luyện; thành phần huấn luyện sẵn duy nhất là bộ mã hóa thị giác SigLIP
+\autocite{zhai2023siglip} được đóng băng, tương tự cách đồ án cuối kỳ dùng
+ResNet đóng băng làm bộ trích đặc trưng.
+
+Chọn tiếng Việt thay vì tiếng Anh vừa là thử thách vừa là đóng góp: dữ liệu web
+tiếng Việt kém sạch hơn, chưa có bộ tách từ chuẩn ``mặc định'' như GPT-2, và các
+VLM tiếng Việt hiện có (LaVy \autocite{tran2024lavy}, Vintern-1B
+\autocite{doan2024vintern}) đều dựa trên LLM đa ngôn ngữ tỷ tham số huấn luyện
+sẵn --- theo khảo sát của tôi, chưa có công bố nào đi trọn đường
+\emph{tự pretrain tiếng Việt} $\rightarrow$ \emph{ghép thị giác} $\rightarrow$
+\emph{SFT} $\rightarrow$ \emph{RL} ở quy mô một GPU.
+
+\section{Vị trí đề tài trong sơ đồ kiến trúc đa phương thức của môn học}
+\label{sec:intro-diagram}
+
+Sơ đồ kiến trúc đa phương thức tổng quát của môn học gồm: các bộ mã hóa riêng
+cho từng phương thức (image encoder, text encoder) sinh ra chuỗi biểu diễn
+token, một khối \emph{hợp nhất} (fusion) bằng attention, đầu ra rẽ hai nhánh
+\emph{phân loại} hoặc \emph{sinh chuỗi}, và --- phần được nhấn mạnh riêng cho
+nhánh sinh --- chuỗi huấn luyện \textbf{SFT rồi RL}.
+
+Ba bài làm của tôi phủ sơ đồ này theo ba bước tăng dần. Đồ án giữa kỳ
+(Medical VQA) đi nhánh \emph{phân loại}: ảnh và câu hỏi được mã hóa, hợp nhất,
+phân loại ra đáp án. Đồ án cuối kỳ (sinh mô tả ảnh Flickr8k) đi nhánh
+\emph{sinh}, nhưng chỉ có một phương thức điều kiện (ảnh) và dừng ở teacher
+forcing cộng một bước SCST. Báo cáo này lấp phần lõi còn lại: \emph{hai} luồng
+token thị giác và ngôn ngữ cùng đổ vào một khối transformer duy nhất --- token
+ảnh được chiếu vào không gian embedding của mô hình ngôn ngữ rồi ghép trước
+chuỗi token văn bản, để self-attention tự làm nhiệm vụ hợp nhất --- và chuỗi
+huấn luyện ba giai đoạn \emph{pretrain $\rightarrow$ SFT $\rightarrow$ RL} đúng
+như vòng đời của các mô hình sinh hiện đại.
+
+\section{Mục tiêu và câu hỏi nghiên cứu}
+
+Đề tài đặt bốn câu hỏi, tương ứng bốn cụm thí nghiệm ở chương~\ref{chap:experiments}:
+\begin{enumerate}
+	\item Tiền huấn luyện từ đầu một mô hình 101M tham số kiến trúc Llama-style
+	      trên khoảng 3 tỷ token tiếng Việt, bằng đúng một GPU 24\,GB, đạt được
+	      chất lượng ngôn ngữ đến đâu (đường cong loss, perplexity,
+	      bits-per-character so với baseline GPT-2 tiếng Việt huấn luyện sẵn)?
+	\item Bộ tách từ BPE tự huấn luyện riêng cho tiếng Việt hiệu quả ra sao so
+	      với tokenizer của PhoGPT và của GPT-2 tiếng Anh (đo bằng fertility ---
+	      số token trung bình trên mỗi từ)?
+	\item Ghép bộ mã hóa thị giác đóng băng vào mô hình ngôn ngữ tự pretrain qua
+	      một projector pixel-shuffle, rồi SFT hai pha trên dữ liệu mô tả ảnh và
+	      hỏi--đáp tiếng Việt, cho chất lượng đa phương thức đến đâu (CIDEr,
+	      BLEU-4 trên UIT-ViIC, KTVIC, OpenViVQA)?
+	\item SCST --- vốn được kiểm chứng ở đồ án cuối kỳ trên mô hình captioning
+	      chuyên dụng --- còn phát huy tác dụng khi áp lên một VLM mà phần ngôn
+	      ngữ tự pretrain không?
+\end{enumerate}
+
+Ngoài ra, đề tài có một mục tiêu hạ tầng tường minh: \emph{sử dụng trọn} tài
+nguyên của máy huấn luyện (GPU 24\,GB) --- cả về mức chiếm dụng tính toán lẫn
+bộ nhớ --- trong khoảng một ngày GPU, với nhật ký \texttt{nvidia-smi} ghi mỗi
+30 giây làm bằng chứng định lượng (mục~\ref{sec:exp-gpu}).
+
+Ràng buộc tự đặt, kế thừa từ hai đồ án trước: \emph{tự cài đặt} toàn bộ phần
+học được --- khối transformer (RoPE, RMSNorm, SwiGLU, attention nhân quả),
+vòng lặp huấn luyện ba giai đoạn, bộ tách từ, projector --- không dùng
+\texttt{transformers} của Hugging Face cho phần ngôn ngữ (thư viện này chỉ được
+dùng để nạp bộ mã hóa SigLIP đóng băng và mô hình baseline khi đánh giá).
+
+\section{Đóng góp và cấu trúc báo cáo}
+
+Đóng góp chính của báo cáo: (i) một pipeline hoàn chỉnh, kiểm thử được
+(52 unit test chạy ngoại tuyến), tái lập được, đưa một mô hình ngôn ngữ tiếng
+Việt từ dữ liệu web thô đến VLM biết trả lời bằng tiếng Việt trên một GPU;
+(ii) các đo đạc định lượng về chất lượng ngôn ngữ, hiệu quả tokenizer, chất
+lượng đa phương thức và hiệu suất phần cứng ở quy mô ``nano''; (iii) một bộ
+bài học hạ tầng thực tế (huấn luyện dài ngày trên WSL2, khôi phục checkpoint
+chính xác từng bit, \texttt{torch.compile} trên kiến trúc GPU mới).
+
+Báo cáo gồm 5 chương. Chương~\ref{chap:background} trình bày cơ sở lý thuyết:
+mô hình ngôn ngữ tự hồi quy, các thành phần kiến trúc Llama-style, BPE, quy
+luật scaling, hợp nhất thị giác kiểu LLaVA, SFT và SCST, cùng các công trình
+liên quan. Chương~\ref{chap:methods} mô tả dữ liệu, kiến trúc và cấu hình
+huấn luyện ba giai đoạn. Chương~\ref{chap:experiments} trình bày kết quả định
+lượng và định tính kèm phân tích hiệu suất phần cứng.
+Chương~\ref{chap:conclusion} kết luận, nêu hạn chế và hướng phát triển.

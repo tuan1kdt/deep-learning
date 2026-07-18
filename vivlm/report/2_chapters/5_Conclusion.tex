@@ -1,0 +1,45 @@
+\chapter{KẾT LUẬN}
+\label{chap:conclusion}
+
+\section{Tổng kết}
+
+Báo cáo đã xây dựng và huấn luyện ViVLM-nano --- một mô hình ngôn ngữ--thị
+giác tiếng Việt mà phần ngôn ngữ 101 triệu tham số được tiền huấn luyện từ
+token đầu tiên trên 3,02 tỷ token FineWeb2-HQ, sau đó hợp nhất thị giác kiểu
+LLaVA (SigLIP đóng băng, projector pixel-shuffle), tinh chỉnh có giám sát hai
+pha trên ba bộ dữ liệu tiếng Việt và tinh chỉnh học tăng cường SCST --- toàn
+bộ trên đúng một GPU 24\,GB. Cùng đồ án giữa kỳ (nhánh phân loại) và đồ án
+cuối kỳ (nhánh sinh có điều kiện đơn phương thức), đề tài khép kín sơ đồ
+kiến trúc đa phương thức của môn học ở phần trung tâm nhất: hợp nhất hai
+luồng token và chuỗi huấn luyện pretrain--SFT--RL.
+
+Về phương pháp làm việc, ba điểm được kiểm chứng là đáng giá: (i)~kỷ luật
+kiểm thử (52 unit test ngoại tuyến, bất biến khôi phục checkpoint chính xác
+từng bit) cho phép yên tâm chạy phiên huấn luyện dài trên hạ tầng từ xa kém
+ổn định; (ii)~đo đạc trước khi cam kết --- các phép đo thông lượng ngắn quyết
+định cấu hình micro-batch và phát hiện \texttt{torch.compile} vừa nhanh gấp
+đôi vừa tiết kiệm 30\% bộ nhớ so với eager; (iii)~tách bạch ba giai đoạn bằng
+checkpoint độc lập giúp quy được đóng góp của từng bước vào kết quả cuối.
+
+\section{Hạn chế}
+
+Bốn hạn chế chính. \textbf{Quy mô}: 101M tham số và 3 tỷ token đặt trần thấp
+cho kiến thức thế giới --- đặc biệt lộ ở hỏi--đáp mở; kết quả không nhằm cạnh
+tranh các VLM tỷ tham số mà nhằm định lượng ``một GPU làm được đến đâu''.
+\textbf{Dữ liệu SFT}: 77 nghìn mẫu là nhỏ so với hàng triệu mẫu của các VLM
+công bố; hai bộ mô tả ảnh lệch miền (thể thao, đời sống) nên khả năng khái
+quát ngoài miền chưa được đo. \textbf{Đánh giá}: chưa có đối chiếu trên
+benchmark VLM chuẩn quốc tế (chúng chưa có bản tiếng Việt tương thích quy mô
+này); BPC so với duy nhất một baseline công khai. \textbf{Bộ mã hóa thị
+giác}: đóng băng hoàn toàn --- chưa khảo sát tinh chỉnh end-to-end vốn là đòn
+bẩy lớn nhất ở đồ án cuối kỳ.
+
+\section{Hướng phát triển}
+
+Nếu tiếp tục, thứ tự ưu tiên: (i)~\emph{DPO} trên cặp ưa thích tự tạo (beam
+tốt nhất/tệ nhất theo CIDEr) --- so sánh trực tiếp với SCST trong cùng ngân
+sách; (ii)~\emph{KV-cache} cho giải mã và \emph{cache đặc trưng ảnh} khi đánh
+giá --- hiện mỗi bước sinh chạy lại toàn chuỗi; (iii)~mở khóa dần SigLIP
+(tinh chỉnh end-to-end) đối chứng với kết luận encoder-là-đòn-bẩy của đồ án
+cuối kỳ; (iv)~trộn thêm dữ liệu chỉ dẫn thuần văn bản vào SFT để giữ chất
+lượng ngôn ngữ khi học kỹ năng nhìn.
