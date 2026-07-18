@@ -21,7 +21,11 @@ sweep warmup và đường cong beam size.
 Kết quả chính: hai kiến trúc hòa CIDEr trên 30.000 caption (qua 3 seed: 0,578
 $\pm$ 0,006 so với 0,576 $\pm$ 0,011), trong khi LSTM vượt có ý nghĩa ở ROUGE-L
 (0,482 so với 0,467) và BLEU-4 với chi phí 2,3 lần thấp hơn về tham số; BLEU-4
-21,9--22,1 ngang mốc \emph{Show, Attend and Tell} trên cùng bộ dữ liệu (21,3). Attention là thành phần đáng giá nhất: tắt nó
+21,9--22,1 ngang mốc \emph{Show, Attend and Tell} trên cùng bộ dữ liệu (21,3).
+Hai thí nghiệm mở rộng cuối cho thấy chất lượng encoder là đòn bẩy lớn nhất
+(ResNet-101 + fine-tune end-to-end đưa LSTM lên CIDEr 0,603, BLEU-4 22,9) và
+tăng dữ liệu 5 lần (Flickr30k) không đảo chiều so sánh: Transformer thắng rõ
+val loss nhưng LSTM vẫn dẫn BLEU-4 khi sinh tự do (0,235 so với 0,224). Attention là thành phần đáng giá nhất: tắt nó
 làm CIDEr greedy giảm 10,5\% (0,536 xuống 0,485), lớn hơn cả khác biệt giữa hai
 kiến trúc. Beam search luôn vượt greedy với biên lớn nhất ở CIDEr, còn SCST nâng
 CIDEr greedy từ 0,536 lên 0,546 nhưng gần như không thêm gì khi đã dùng beam.

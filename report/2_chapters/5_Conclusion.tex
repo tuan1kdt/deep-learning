@@ -36,6 +36,15 @@ Bốn trục thí nghiệm cho bốn kết luận chính:
 	      biên gần như biến mất khi đã dùng beam search; riêng LSTM chỉ cần
 	      tăng beam lên 8 đã đạt BLEU-4 0,221 ngang SCST. Với hệ có sẵn beam,
 	      RL tinh chỉnh là khoản đầu tư lợi suất thấp trên bộ dữ liệu này.
+	\item \textbf{Encoder và quy mô dữ liệu (mở rộng 2):} đổi ResNet-50 sang
+	      ResNet-101 rồi fine-tune end-to-end khối layer4 kèm augmentation đưa
+	      LSTM lên CIDEr 0,603 / BLEU-4 0,229 --- kỷ lục toàn đồ án, chuỗi
+	      cộng dồn $+0{,}030$ CIDEr lớn hơn mọi kỹ thuật phía decoder đã khảo
+	      sát. Tăng dữ liệu 5 lần (Flickr30k) \emph{bác} dự đoán ``thêm dữ
+	      liệu thì Transformer vượt lên'': val loss thắng rõ (3,676 so với
+	      3,793) nhưng LSTM vẫn dẫn BLEU-4 khi sinh tự do (0,235 so với
+	      0,224) --- loss tốt hơn không đồng nghĩa caption tốt hơn, kể cả ở
+	      quy mô lớn hơn.
 \end{enumerate}
 
 Cùng với đồ án giữa kỳ (Medical VQA), hai nhánh classification và generation
@@ -45,13 +54,13 @@ chiếu trên cùng một khung tư duy.
 \section{Hạn chế}
 
 \begin{itemize}
-	\item \textbf{Không augmentation ảnh:} do đặc trưng được tính trước một lần
-	      trên encoder đóng băng --- đánh đổi có chủ đích để đổi lấy tốc độ
-	      thí nghiệm.
-	\item \textbf{Không tinh chỉnh encoder:} ResNet-50 giữ nguyên trọng số
-	      ImageNet; đặc trưng có thể chưa tối ưu cho miền mô tả ảnh.
-	\item \textbf{Dữ liệu nhỏ:} 8k ảnh là quy mô học thuật; kết luận về so sánh
-	      kiến trúc không nhất thiết ngoại suy được sang quy mô lớn.
+	\item \textbf{Augmentation và tinh chỉnh encoder} chỉ được gỡ ở giai đoạn
+	      mở rộng (mục~\ref{sec:ext2}) và mới dừng ở khối layer4 với 4 epoch; pipeline
+	      chính vẫn dùng đặc trưng tính trước trên encoder đóng băng ---
+	      đánh đổi có chủ đích để đổi lấy tốc độ thí nghiệm.
+	\item \textbf{Quy mô dữ liệu} đã được kiểm chứng tới Flickr30k (5$\times$),
+	      nhưng vẫn là quy mô học thuật; so sánh kiến trúc ở hàng trăm nghìn
+	      ảnh (MS COCO trở lên) vẫn là câu hỏi mở.
 	\item \textbf{Từ điển mức từ:} từ hiếm bị gộp về \texttt{<unk>}, mô hình
 	      không thể sinh từ ngoài từ điển.
 \end{itemize}

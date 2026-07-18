@@ -538,6 +538,100 @@ cụ thể cho một nguyên tắc thực nghiệm: với các khác biệt cỡ
 không phải bằng chứng --- phải trả lời bằng nhiều seed và phân tích độ nhạy
 trước khi tuyên bố người thắng.
 
+\section{Thí nghiệm mở rộng 2: encoder và quy mô dữ liệu}
+\label{sec:ext2}
+
+Các thí nghiệm ở mục~\ref{sec:ext} đều xoay quanh \emph{decoder}. Loạt cuối
+cùng này đụng vào hai biến còn lại của hệ --- chất lượng encoder và quy mô dữ
+liệu --- đồng thời gỡ trực tiếp hai hạn chế đã tự khai từ đầu (encoder đóng
+băng, không augmentation).
+
+\subsection{Encoder tốt hơn ăn nhiều hơn mọi kỹ thuật decoder}
+
+Nhờ thiết kế tính trước đặc trưng, đổi encoder chỉ là precompute lại một lần:
+ResNet-101 có cùng số kênh layer4 (2048) và cùng lưới $7\times 7$ nên decoder
+giữ nguyên từng dòng. Bước tiếp theo, \emph{fine-tune end-to-end}: nạp lại
+checkpoint, gắn ResNet thật vào trước decoder, mở băng riêng khối layer4
+(BatchNorm ghim eval để thống kê ImageNet không trôi trên 6k ảnh) và huấn luyện
+4 epoch trên ảnh thô với RandomResizedCrop + lật ngang --- augmentation mà
+đường tính trước không thể có.
+
+\begin{table}[H]
+	\centering
+	\caption{Chuỗi cải thiện encoder, giải mã beam 5, tập kiểm tra Flickr8k.}
+	\label{tab:encoder-chain}
+	\begin{tabular}{llccc}
+		\hline
+		\textbf{Decoder} & \textbf{Encoder} & \textbf{B-4} & \textbf{ROUGE-L} & \textbf{CIDEr} \\
+		\hline
+		LSTM+attn & ResNet-50 đóng băng      & 0,219 & 0,483 & 0,573 \\
+		LSTM+attn & ResNet-101 đóng băng     & 0,218 & 0,482 & 0,595 \\
+		LSTM+attn & ResNet-101 + fine-tune   & \textbf{0,229} & \textbf{0,489} & \textbf{0,603} \\
+		\hline
+		Transformer & ResNet-50 đóng băng    & 0,215 & 0,469 & 0,571 \\
+		Transformer & ResNet-101 đóng băng   & 0,215 & 0,473 & 0,583 \\
+		Transformer & ResNet-101 + fine-tune & 0,215 & 0,472 & 0,593 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Chuỗi cộng dồn của LSTM là $+0{,}030$ CIDEr (0,573 $\to$ 0,603) và BLEU-4 chạm
+\textbf{0,229} --- kỷ lục của toàn đồ án, vượt hẳn mốc \emph{Show, Attend and
+Tell} (21,3). Để so sánh độ lớn: toàn bộ vòng tinh chỉnh SCST mang lại
+$+0{,}002$ CIDEr ở beam 5, còn khoảng cách LSTM/Transformer quanh 0,005. Nói
+cách khác, ở quy mô này \emph{chất lượng đặc trưng thị giác} là đòn bẩy lớn
+nhất --- lớn hơn mọi lựa chọn phía decoder mà đồ án đã khảo sát --- và phần
+lớn lợi ích đến từ hai thứ rất rẻ: một backbone sâu hơn (precompute lại mất
+vài phút) và vài epoch fine-tune khối cuối. Mẫu hình lặp lại ở cả hai kiến
+trúc (Transformer $+0{,}022$ cộng dồn) xác nhận đây là hiệu ứng encoder, không
+phải tương tác riêng với decoder nào.
+
+\subsection{Tăng dữ liệu 5 lần: kiểm chứng giả thuyết quy mô}
+
+Kết luận trung tâm của báo cáo --- ``hai kiến trúc hòa vì dữ liệu nhỏ'' ---
+hàm chứa một dự đoán kiểm chứng được: nếu tăng dữ liệu, Transformer phải vượt
+lên. Chúng tôi huấn luyện lại cả hai trên Flickr30k \autocite{young2014flickr30k}
+(31.014 ảnh, 155k caption, Karpathy split 29k/1k/1k) với cùng cấu hình; từ
+điển mở rộng lên 7.383 từ. Đáng chú ý, warmup 2.000 bước giờ chỉ chiếm
+$\approx$1,8 epoch (thay vì 8,5) --- điều kiện huấn luyện của Transformer công
+bằng hơn hẳn.
+
+\begin{table}[H]
+	\centering
+	\caption{Flickr8k so với Flickr30k (test 1.000 ảnh mỗi bộ; CIDEr không so
+	ngang được giữa hai bộ dữ liệu do phân phối tham chiếu và trọng số TF--IDF
+	khác nhau).}
+	\label{tab:scale}
+	\begin{tabular}{llcccc}
+		\hline
+		\textbf{Dữ liệu} & \textbf{Mô hình} & \textbf{Giải mã} & \textbf{B-4} & \textbf{ROUGE-L} & \textbf{CIDEr} \\
+		\hline
+		Flickr8k  & LSTM+attn   & beam 5 & 0,219 & 0,483 & 0,573 \\
+		Flickr8k  & Transformer & beam 3 & 0,219 & 0,474 & 0,587 \\
+		\hline
+		Flickr30k & LSTM+attn   & beam 5 & \textbf{0,235} & \textbf{0,465} & \textbf{0,527} \\
+		Flickr30k & Transformer & beam 5 & 0,224 & 0,460 & 0,523 \\
+		\hline
+	\end{tabular}
+\end{table}
+
+Kết quả \emph{bác} dự đoán ở mức 5$\times$: về loss, Transformer thắng rõ chưa
+từng thấy (val 3,676 so với 3,793 --- trên Flickr8k khoảng cách chỉ 0,14 và
+từng bị nghi là không chuyển thành metric); nhưng về sinh tự do, LSTM vẫn dẫn
+BLEU-4 (0,235 so với 0,224) và ROUGE-L, CIDEr hòa. Hiện tượng ``loss tốt hơn
+$\ne$ caption tốt hơn'' đã ghi nhận ở mục 4.2 không những không biến mất khi
+dữ liệu tăng 5 lần mà còn khuếch đại. Hai cách đọc bổ sung cho nhau: (i) 31k
+ảnh vẫn nằm trong vùng ``dữ liệu nhỏ'' đối với attention thuần túy --- các
+nghiên cứu quy mô lớn thường cần hàng trăm nghìn ảnh trở lên; (ii) lợi thế
+per-token của Transformer tập trung ở những dự đoán mà teacher forcing mớm ngữ
+cảnh đúng, còn khi tự sinh trọn câu, sai số tích lũy xóa phần lớn lợi thế đó.
+Với người làm thực tế, thông điệp là một lời cảnh báo kép: đừng chọn kiến trúc
+theo val loss, và đừng mặc định ``thêm dữ liệu sẽ đảo chiều so sánh'' khi chưa
+đo. BLEU-4 tuyệt đối của cả hai đều tăng theo dữ liệu (LSTM 0,221 $\to$ 0,235
+tính theo mốc tốt nhất) và vượt xa mốc Show, Attend and Tell trên Flickr30k
+(19,9) --- pipeline khỏe lên theo quy mô, chỉ có \emph{thứ hạng} hai decoder
+là không đổi.
+
 \section{Bàn luận}
 
 \begin{itemize}
