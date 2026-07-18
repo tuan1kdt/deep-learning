@@ -50,16 +50,14 @@ CIDEr: Transformer với beam 3 đạt \textbf{0,587} --- cao nhất trong toàn
 đoạn SFT --- nhỉnh hơn mức 0,573 của LSTM khoảng 2,4\%. Nhưng lợi thế mỏng này
 phải trả bằng \textbf{2,3 lần} số tham số (14,97 triệu so với 6,55 triệu,
 bảng~\ref{tab:architecture}) và một lịch huấn luyện nhạy cảm hơn hẳn (cần warmup,
-mục~\ref{sec:learning-process}). Kết quả này nhất quán với nhận định phổ biến về
-\emph{nhu cầu dữ liệu} của kiến trúc attention thuần túy: Transformer thiếu các
-thiên kiến quy nạp tuần tự mà LSTM có sẵn (trạng thái truyền theo thời gian,
-cổng quên), nên phải \emph{học} các ràng buộc thứ tự từ dữ liệu --- với 30.000
-caption, nó vừa đủ để đuổi kịp và nhỉnh nhẹ ở CIDEr, chứ chưa đủ để bứt phá như
-ở các kho ngữ liệu lớn. Đáng chú ý là val loss của Transformer thấp hơn rõ rệt
-(3,60 so với 3,73, mục~\ref{sec:learning-process}) nhưng khoảng cách đó
-\emph{không} chuyển hết thành BLEU/CIDEr: loss per-token đo chất lượng dự đoán
-từng bước khi được mớm ngữ cảnh đúng (teacher forcing), còn metric đo chất lượng
-của cả chuỗi sinh tự do --- hai đại lượng liên quan nhưng không đồng nhất.
+mục~\ref{sec:learning-process}). Kết quả nhất quán với nhận định phổ biến về
+\emph{nhu cầu dữ liệu} của kiến trúc attention thuần túy: thiếu thiên kiến quy
+nạp tuần tự của LSTM, Transformer phải \emph{học} ràng buộc thứ tự từ dữ liệu
+--- 30.000 caption vừa đủ để đuổi kịp, chưa đủ để bứt phá. Đáng chú ý, val
+loss của Transformer thấp hơn rõ rệt (3,60 so với 3,73) nhưng khoảng cách đó
+\emph{không} chuyển hết thành BLEU/CIDEr: loss per-token đo dự đoán từng bước
+khi được mớm ngữ cảnh đúng (teacher forcing), còn metric đo cả chuỗi sinh tự do
+--- hai đại lượng liên quan nhưng không đồng nhất.
 
 \subsection{Attention đóng góp bao nhiêu}
 
@@ -79,37 +77,32 @@ các từ nội dung (danh từ, động từ) thực sự bám vào vùng ảnh
 Với cả bốn mô hình, beam search cải thiện so với greedy, nhưng không đều giữa
 các metric: BLEU-1 gần như đứng yên (chênh $-0{,}001$ đến $+0{,}009$), trong khi
 CIDEr tăng mạnh nhất --- $+0{,}037$ cho LSTM (0,536 $\to$ 0,573), $+0{,}053$ cho
-Transformer (0,534 $\to$ 0,587), $+0{,}055$ cho bản không attention. Điều này có
-lý do cấu trúc: BLEU-1 chỉ đếm unigram khớp, mà các unigram phổ biến (a, dog,
-man, is) thì greedy cũng chọn đúng; beam search phát huy ở các \emph{cụm dài}
-(BLEU-3/4 tăng đều $\approx0{,}01$--$0{,}02$) và ở các \emph{từ mang thông tin
-phân biệt} --- đúng thứ CIDEr đánh trọng số TF--IDF cao. Greedy chốt từng bước
-không hối hận nên dễ sa vào câu an toàn, chung chung; beam giữ nhiều giả thuyết
-song song nên có cơ hội chọn câu cụ thể hơn. Cuối cùng, beam 5 chỉ hơn beam 3
-không đáng kể (LSTM: 0,573 so với 0,570) và với Transformer thậm chí kém hơn
-(0,571 so với 0,587) --- mở rộng chùm quá mức có thể vớt vào các câu ngắn, chung
-chung được chuẩn hóa độ dài ưu ái; $B=3$ là điểm cân bằng chi phí/chất lượng
-hợp lý trên bộ dữ liệu này.
+Transformer (0,534 $\to$ 0,587), $+0{,}055$ cho bản không attention. Lý do cấu
+trúc: các unigram phổ biến (a, dog, man, is) thì greedy cũng chọn đúng; beam
+phát huy ở các \emph{cụm dài} (BLEU-3/4 tăng đều $\approx0{,}01$--$0{,}02$) và
+ở các \emph{từ mang thông tin phân biệt} --- đúng thứ CIDEr đánh trọng số
+TF--IDF cao. Cuối cùng, beam 5 chỉ hơn beam 3 không đáng kể (LSTM: 0,573 so
+với 0,570) và với Transformer thậm chí kém hơn (0,571 so với 0,587) --- mở
+rộng chùm quá mức có thể vớt vào các câu ngắn, chung chung được chuẩn hóa độ
+dài ưu ái; $B=3$ là điểm cân bằng chi phí/chất lượng hợp lý trên bộ dữ liệu này.
 
 \subsection{Đối chiếu với Show, Attend and Tell}
 
 Mốc tham chiếu kinh điển trên Flickr8k là \emph{Show, Attend and Tell} (soft
 attention): BLEU-1 67,0 và BLEU-4 21,3 \autocite{xu2015show}. Hệ của đồ án đạt
 BLEU-4 21,9--22,1 (beam) --- ngang và nhỉnh nhẹ so với mốc này --- trong khi
-BLEU-1 thấp hơn (62,4 so với 67,0). Hai điểm khác biệt cài đặt giải thích phần
-lớn chênh lệch: encoder của đồ án là ResNet-50 hiện đại hơn (so với
-VGG/GoogLeNet đương thời) nhưng bị \emph{đóng băng hoàn toàn} và không
-augmentation; và khác biệt tokenize/từ điển ảnh hưởng trực tiếp đến BLEU-1
-(vốn nhạy với từng unigram) nhiều hơn BLEU-4. Kết quả tổng thể xác nhận pipeline
-tự cài đặt tái lập đúng vùng chất lượng mà phương pháp attention cổ điển đạt
-được trên bộ dữ liệu này.
+BLEU-1 thấp hơn (62,4 so với 67,0). Hai khác biệt cài đặt giải thích phần lớn
+chênh lệch: encoder ResNet-50 hiện đại hơn nhưng \emph{đóng băng hoàn toàn} và
+không augmentation; và khác biệt tokenize/từ điển ảnh hưởng đến BLEU-1 (nhạy
+với từng unigram) nhiều hơn BLEU-4. Kết quả xác nhận pipeline tự cài đặt tái
+lập đúng vùng chất lượng của phương pháp attention cổ điển trên bộ dữ liệu này.
 
 \section{Quá trình học}
 \label{sec:learning-process}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.95\textwidth]{figs/results/curves_main.png}
+	\includegraphics[width=0.7\textwidth]{figs/results/curves_main.png}
 	\caption{Đường cong cross-entropy/token trên tập huấn luyện (nét đứt) và
 	kiểm định (nét liền) của ba run chính, cùng seed 42. Transformer xuất phát
 	cao hơn hẳn và chỉ vượt xuống dưới hai run LSTM quanh epoch 8--9, đúng vùng
@@ -121,41 +114,38 @@ Hình~\ref{fig:curves} cho thấy ba điểm đáng bàn.
 
 \textbf{Tốc độ hội tụ và dấu vết của warmup.} LSTM giảm loss rất nhanh trong
 5 epoch đầu (train 5,40 $\to$ 3,92) rồi chậm dần; Transformer xuất phát cao hơn
-hẳn (6,96) và giảm chậm trong giai đoạn đầu vì learning rate còn đang được nâng
-dần theo lịch warmup. Với 30.000 mẫu và batch 128, một epoch có
-$\approx$235 bước, nên 2.000 bước warmup tương đương $\approx$\textbf{8,5 epoch}
---- khớp chính xác với vị trí trên đồ thị nơi đường train của Transformer cắt
-xuống dưới hai đường LSTM (epoch 8--9). Nói cách khác, gần một phần ba quá trình
-huấn luyện của Transformer là ``chạy đà''; đây là cái giá về lịch huấn luyện đã
-nêu ở mục 3.5, và cũng là lý do các caption mẫu của nó ``trưởng thành'' muộn
-hơn (bảng~\ref{tab:samples-by-epoch}).
+hẳn (6,96) và giảm chậm giai đoạn đầu vì learning rate còn đang được nâng theo
+warmup. Với 30.000 mẫu, batch 128 ($\approx$235 bước/epoch), 2.000 bước warmup
+tương đương $\approx$\textbf{8,5 epoch} --- khớp chính xác với vị trí đường
+train của Transformer cắt xuống dưới hai đường LSTM (epoch 8--9). Gần một phần
+ba quá trình huấn luyện của Transformer là ``chạy đà'' --- cái giá về lịch huấn
+luyện đã nêu ở mục 3.5, và lý do caption mẫu của nó ``trưởng thành'' muộn hơn
+(bảng~\ref{tab:samples-by-epoch}).
 
 \textbf{Khoảng cách train--val: overfit nhẹ, được early stopping chặn đúng lúc.}
 Cuối huấn luyện, khoảng cách train--val là 0,61 (LSTM), 0,53 (Transformer), 0,59
-(không attention) --- có overfit nhưng ở mức lành: val loss của cả ba run
-\emph{đi ngang} (plateau) chứ không quay đầu tăng, ví dụ LSTM đạt đáy 3,732 ở
-epoch 19 rồi dao động quanh 3,734 suốt 5 epoch sau đó, khiến patience 5 kích
-hoạt ở epoch 24. Dropout 0,3, label smoothing 0,1 và weight decay 0,01 giữ cho
-phần ghi nhớ tập huấn luyện không phá hỏng khả năng khái quát.
+(không attention) --- overfit ở mức lành: val loss của cả ba run \emph{đi
+ngang} chứ không quay đầu tăng (LSTM đạt đáy 3,732 ở epoch 19 rồi dao động
+quanh 3,734, khiến patience 5 kích hoạt ở epoch 24). Dropout 0,3, label
+smoothing 0,1 và weight decay 0,01 giữ phần ghi nhớ không phá khả năng khái quát.
 
 \textbf{Loss gần nhau không có nghĩa metric gần nhau.} Val loss của LSTM có và
 không có attention chỉ chênh 0,03 (3,732 so với 3,763), nhưng CIDEr chênh tới
-0,051 (greedy). Attention giúp nhiều nhất ở chính những bước dự đoán ``khó'' ---
-từ nội dung xuất hiện thưa --- vốn đóng góp ít vào loss trung bình trên token
-nhưng quyết định chất lượng cảm nhận của cả câu. Đây là lý do đồ án không dừng
-ở loss mà đo cả BLEU/CIDEr và soi từng bản đồ attention.
+0,051 (greedy). Attention giúp nhiều nhất ở những bước dự đoán ``khó'' --- từ
+nội dung xuất hiện thưa --- vốn đóng góp ít vào loss trung bình trên token
+nhưng quyết định chất lượng cảm nhận của cả câu; vì vậy đồ án không dừng ở
+loss mà đo cả BLEU/CIDEr và soi từng bản đồ attention.
 
 \subsection{Caption ``trưởng thành'' qua các epoch}
 
-Trong suốt huấn luyện, sau mỗi epoch hệ thống sinh caption (greedy) cho 3 ảnh
-kiểm định cố định. Bảng~\ref{tab:samples-by-epoch} trích ba mốc cho hai ảnh
-tiêu biểu.
+Sau mỗi epoch, hệ thống sinh caption (greedy) cho 3 ảnh kiểm định cố định;
+bảng~\ref{tab:samples-by-epoch} trích mốc đầu và cuối cho hai ảnh tiêu biểu.
 
 \begin{table}[H]
 	\centering
-	\caption{Caption greedy của cùng hai ảnh kiểm định qua các epoch (trích từ
-	\texttt{samples\_by\_epoch.md}). Ảnh A: người leo trên mỏm đá; ảnh B: chó
-	vượt rào trong sân thi đấu.}
+	\caption{Caption greedy của cùng hai ảnh kiểm định ở epoch đầu và cuối
+	(trích từ \texttt{samples\_by\_epoch.md}). Ảnh A: người leo trên mỏm đá;
+	ảnh B: chó vượt rào trong sân thi đấu.}
 	\label{tab:samples-by-epoch}
 	\small
 	\begin{tabular}{clp{4.6cm}p{4.6cm}}
@@ -165,42 +155,35 @@ tiêu biểu.
 		1  & LSTM        & a man in a a a a a & a dog dog dog a a a \\
 		1  & Transformer & a a a a a a a a a a a a & a a a a a a a a a a a \\
 		\hline
-		5  & LSTM        & a man in a red shirt is jumping on a rock & a woman and a woman and a white dog is jumping over a white fence \\
-		5  & Transformer & a man is jumping on a rock & a dog is jumping on a red ball \\
-		\hline
 		cuối & LSTM        & a man in a black shirt is jumping on a rock in the woods & a woman in a white and white dog is jumping over a hurdle \\
 		cuối & Transformer & a boy in a white shirt is jumping off a rock & a woman in a white shirt is running through a grassy field \\
 		\hline
 	\end{tabular}
 \end{table}
 
-Quỹ đạo ``trưởng thành'' hiện rõ và khác nhau giữa hai kiến trúc. Ở epoch~1,
-LSTM đã bắt được khung cú pháp ``a man in a\ldots'' nhưng thoái hóa thành lặp
-mạo từ; Transformer khi đó còn chưa thoát khỏi chuỗi toàn ``a'' --- learning
-rate mới đi được nửa đường warmup. Các epoch 2--4 của Transformer đầy những vòng
-lặp cụm (``a man in a man in a\ldots''), rồi \emph{bật} khá đột ngột quanh epoch
-5--6 sang câu đúng ngữ pháp. Từ epoch $\approx$10 trở đi, thay đổi chủ yếu là
-tinh chỉnh chi tiết (màu áo đổi giữa black/white, thêm bối cảnh ``in the
-woods'') --- nhất quán với đoạn plateau của val loss. Đáng chú ý, caption cuối
-của LSTM cho ảnh B vẫn giữ một lỗi cấu trúc (``a woman in a white and white
-dog'') trong khi Transformer cùng ảnh cho câu trôi chảy hơn --- một ví dụ nhỏ
-cho thấy val loss thấp hơn của Transformer có thật ở mặt \emph{độ trôi chảy},
-dù không đổi hết thành điểm BLEU.
+Quỹ đạo ``trưởng thành'' khác nhau giữa hai kiến trúc. Ở epoch~1, LSTM đã bắt
+được khung cú pháp nhưng thoái hóa thành lặp mạo từ; Transformer còn chưa
+thoát khỏi chuỗi toàn ``a'' --- learning rate mới đi nửa đường warmup --- rồi
+\emph{bật} khá đột ngột quanh epoch 5--6 sang câu đúng ngữ pháp. Từ epoch
+$\approx$10 trở đi, thay đổi chủ yếu là tinh chỉnh chi tiết (màu áo, bối cảnh)
+--- nhất quán với đoạn plateau của val loss. Đáng chú ý, caption cuối của LSTM
+cho ảnh B vẫn giữ một lỗi cấu trúc (``a woman in a white and white dog'') trong
+khi Transformer cùng ảnh cho câu trôi chảy hơn --- val loss thấp hơn của
+Transformer có thật ở mặt \emph{độ trôi chảy}, dù không đổi hết thành điểm BLEU.
 
 \section{Phân tích định tính: attention nhìn đâu khi sinh từ}
 \label{sec:qualitative}
 
 Các hình dưới đây trực quan hóa trọng số attention khi decoder sinh từng từ:
-với LSTM là trọng số Bahdanau (một đầu duy nhất), với Transformer là
-cross-attention tầng cuối, trung bình 8 đầu; lưới $7\times7$ được nội suy và
-phủ màu lên ảnh gốc (đỏ = trọng số cao). Toàn bộ nhận xét dưới đây dựa trên
-các bản đồ nhiệt sinh từ checkpoint thật trên ảnh tập kiểm tra.
+với LSTM là trọng số Bahdanau (một đầu), với Transformer là cross-attention
+tầng cuối trung bình 8 đầu; lưới $7\times7$ được nội suy và phủ màu lên ảnh
+gốc (đỏ = trọng số cao), sinh từ checkpoint thật trên ảnh tập kiểm tra.
 
 \subsection{Ca thành công}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.88\textwidth]{figs/results/lstm_attention_5.png}
+	\includegraphics[width=0.7\textwidth]{figs/results/lstm_attention_5.png}
 	\caption{LSTM+attention, ca thành công: ``a dog runs through the grass''.
 	Khi sinh ``dog'', trọng số phủ lên thân chó; khi sinh ``grass'', vùng sáng
 	rơi xuống các ô nền cỏ ở rìa dưới ảnh.}
@@ -209,7 +192,7 @@ các bản đồ nhiệt sinh từ checkpoint thật trên ảnh tập kiểm tr
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.88\textwidth]{figs/results/transformer_attention_0.png}
+	\includegraphics[width=0.7\textwidth]{figs/results/transformer_attention_0.png}
 	\caption{Transformer, ca thành công: ``two dogs are running through a snowy
 	field''. Khi sinh ``two'' và ``dogs'', dải trọng số trải ngang phủ \emph{cả
 	hai} con chó; khi sinh ``snowy''/``field'', vùng sáng chuyển hẳn lên nền
@@ -218,19 +201,18 @@ các bản đồ nhiệt sinh từ checkpoint thật trên ảnh tập kiểm tr
 \end{figure}
 
 Ở hình~\ref{fig:attn-success-lstm}, hành vi của attention khớp trực giác ngôn
-ngữ: từ nội dung bám vùng chứa vật thể (``dog'' $\to$ thân chó), từ chỉ bối
-cảnh bám nền (``grass'' $\to$ các ô cỏ góc dưới), còn các từ chức năng
-(``through'', ``the'') có bản đồ tản mát ra biên ảnh --- chúng được quyết định
-bởi ngữ pháp của chuỗi đã sinh chứ không cần thông tin thị giác, nên mô hình
-``nhìn đi chỗ khác'' cũng không sao. Hình~\ref{fig:attn-success-transformer}
-còn thú vị hơn: đây là ảnh hai con chó chơi trên tuyết, và Transformer đếm
-\emph{đúng} --- ``two dogs'' --- với dải attention phủ đồng thời cả hai con.
+ngữ: từ nội dung bám vùng chứa vật thể (``dog'' $\to$ thân chó), từ bối cảnh
+bám nền (``grass'' $\to$ các ô cỏ góc dưới), còn từ chức năng (``through'',
+``the'') tản mát ra biên ảnh --- chúng do ngữ pháp quyết định, không cần thông
+tin thị giác. Hình~\ref{fig:attn-success-transformer} còn thú vị hơn:
+Transformer đếm \emph{đúng} --- ``two dogs'' --- với dải attention phủ đồng
+thời cả hai con chó trên tuyết.
 
 \subsection{Ca thất bại và chẩn đoán}
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.88\textwidth]{figs/results/lstm_attention_0.png}
+	\includegraphics[width=0.7\textwidth]{figs/results/lstm_attention_0.png}
 	\caption{LSTM+attention trên \emph{cùng ảnh} với
 	hình~\ref{fig:attn-success-transformer}: ``a brown dog is running through
 	the snow'' --- sai số đếm. Trọng số Bahdanau tạo đỉnh sắc, khóa vào một con
@@ -240,7 +222,7 @@ còn thú vị hơn: đây là ảnh hai con chó chơi trên tuyết, và Trans
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.88\textwidth]{figs/results/lstm_attention_17.png}
+	\includegraphics[width=0.7\textwidth]{figs/results/lstm_attention_17.png}
 	\caption{LSTM+attention, ca thất bại kép: ``a boy in a blue shirt is
 	standing at a table at a table''. Sai màu áo (áo rằn ri tối màu), lặp cụm
 	``at a table'', nhưng khi sinh ``table'' attention trỏ đúng vào vật gỗ cậu
@@ -250,7 +232,7 @@ còn thú vị hơn: đây là ảnh hai con chó chơi trên tuyết, và Trans
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.88\textwidth]{figs/results/transformer_attention_42.png}
+	\includegraphics[width=0.7\textwidth]{figs/results/transformer_attention_42.png}
 	\caption{Transformer, cảnh ngoài phân phối (khoang máy bay): ``two young
 	girls sit on a bench''. Attention khi sinh ``two''/``girls'' vẫn bám đúng
 	cụm khuôn mặt hành khách, nhưng danh tính (người lớn + trẻ em) và vật thể
@@ -264,126 +246,93 @@ Ba ca thất bại trên minh họa ba chế độ lỗi khác nhau:
 chó, LSTM nói ``a brown dog'' còn Transformer nói ``two dogs''. Bản đồ nhiệt gợi
 ý nguyên nhân cơ chế: trọng số Bahdanau một đầu có xu hướng tạo \emph{đỉnh sắc}
 --- dồn phần lớn khối lượng vào một cụm ô liền kề --- nên vector ngữ cảnh mỗi
-bước gần như chỉ mô tả một con vật; trong khi bản đồ trung bình 8 đầu của
-Transformer \emph{mượt và lan rộng hơn}, phủ cả hai con cùng lúc, đưa được tín
-hiệu ``có nhiều hơn một'' vào decoder. Một đầu attention chỉ tạo ra một phân
-phối trên 49 vùng mỗi bước; tám đầu được phép nhìn tám nơi rồi trộn lại --- với
-bài toán đếm, đó là khác biệt về chất.
+bước gần như chỉ mô tả một con vật; bản đồ trung bình 8 đầu của Transformer
+\emph{mượt và lan rộng hơn}, phủ cả hai con cùng lúc, đưa được tín hiệu ``có
+nhiều hơn một'' vào decoder. Với bài toán đếm, tám đầu nhìn tám nơi rồi trộn
+lại là khác biệt về chất so với một phân phối duy nhất trên 49 vùng.
 
 \textbf{Vòng lặp greedy và thuộc tính sai (hình~\ref{fig:attn-fail-loop}).}
 Câu ``\ldots at a table at a table'' là thất bại của \emph{giải mã} chứ không
-hẳn của attention: greedy không có cơ chế phạt lặp, và khi phân phối xác suất
-tại một bước gần như dừng ở trạng thái cũ, chuỗi rơi vào chu trình. Điều đáng
-ghi nhận là khi sinh ``table'', attention trỏ \emph{đúng} vào vật gỗ trên đầu
-cậu bé --- mô hình nhìn đúng chỗ nhưng gọi tên sai, vì tư thế ``đội đồ gỗ trên
+hẳn của attention: greedy không có cơ chế phạt lặp, chuỗi rơi vào chu trình.
+Đáng ghi nhận là khi sinh ``table'', attention trỏ \emph{đúng} vào vật gỗ trên
+đầu cậu bé --- nhìn đúng chỗ nhưng gọi tên sai, vì tư thế ``đội đồ gỗ trên
 đầu'' gần như không tồn tại trong 30.000 caption huấn luyện; ``table'' là từ
-gỗ-có-mặt-phẳng gần nhất mà từ điển của nó cung cấp. Màu áo ``blue'' cũng vậy:
-áo rằn ri tối màu nằm ngoài bảng màu quần áo quen thuộc của dữ liệu.
+gỗ-có-mặt-phẳng gần nhất từ điển cung cấp. Màu áo ``blue'' cũng vậy: áo rằn ri
+tối màu nằm ngoài bảng màu quần áo quen thuộc của dữ liệu.
 
 \textbf{Cảnh ngoài phân phối (hình~\ref{fig:attn-fail-ood}).} Flickr8k hầu như
 không có ảnh trong khoang máy bay, nên cả hai mô hình đều ``dịch'' cảnh lạ về
 từ vựng quen: Transformer biến hành khách thành ``two young girls'' và ghế máy
-bay thành ``bench'' (LSTM trên cùng ảnh còn kém hơn: ``a woman and woman sit on
-a table''). Đây là dạng hallucination có hệ thống --- không phải nhìn nhầm
-ngẫu nhiên mà là chiếu cảnh chưa từng gặp lên khái niệm gần nhất trong phân
-phối huấn luyện --- và là lời nhắc rằng metric trung bình trên tập kiểm tra
-cùng phân phối không nói gì về hành vi ngoài phân phối.
+bay thành ``bench'' (LSTM còn kém hơn: ``a woman and woman sit on a table'').
+Đây là hallucination có hệ thống --- chiếu cảnh chưa từng gặp lên khái niệm
+gần nhất trong phân phối huấn luyện --- và là lời nhắc rằng metric trung bình
+trên tập kiểm tra cùng phân phối không nói gì về hành vi ngoài phân phối.
 
-\textbf{So sánh hai cơ chế attention.} Nhìn xuyên suốt các hình: bản đồ Bahdanau
-một đầu tương phản mạnh, ít ô rất sáng trên nền tối --- dễ đọc, ``chỉ tay'' rõ,
-nhưng chính tính chọn lọc đó gây lỗi đếm; bản đồ trung bình 8 đầu của
-Transformer mượt và loang hơn (nhiều ô mức trung bình), phần vì mỗi đầu nhìn
-một nơi và phép trung bình làm nhòe các đỉnh riêng lẻ. Cả hai đều chung một
-hành vi ở từ chức năng (``is'', ``a'', ``the''): trọng số tản ra biên hoặc nền,
-xác nhận rằng attention chỉ thực sự ``làm việc'' ở những từ cần thông tin thị
-giác.
+\textbf{So sánh hai cơ chế attention.} Xuyên suốt các hình: bản đồ Bahdanau
+một đầu tương phản mạnh, ``chỉ tay'' rõ, nhưng chính tính chọn lọc đó gây lỗi
+đếm; bản đồ trung bình 8 đầu của Transformer mượt và loang hơn vì mỗi đầu nhìn
+một nơi và phép trung bình làm nhòe các đỉnh riêng lẻ. Cả hai chung hành vi ở
+từ chức năng (``is'', ``a'', ``the''): trọng số tản ra biên hoặc nền --- attention
+chỉ thực sự ``làm việc'' ở những từ cần thông tin thị giác.
 
 \section{Phát hiện trong quá trình phát triển: thang khởi tạo embedding khi tie weight}
 \label{sec:embedding-init}
 
-Mục này ghi lại một lỗi thực tế gặp phải trong quá trình phát triển và cách xử
-lý --- không phải kết quả thí nghiệm chính, nhưng là phát hiện có giá trị
-phương pháp luận: so sánh công bằng hai kiến trúc đòi hỏi kiểm soát cả những
-chi tiết ``ngầm định'' như thang khởi tạo tham số, không chỉ kiến trúc trên
-giấy.
+Mục này ghi lại một lỗi thực tế gặp phải trong quá trình phát triển --- không
+phải kết quả thí nghiệm chính, nhưng có giá trị phương pháp luận: so sánh công
+bằng hai kiến trúc đòi hỏi kiểm soát cả những chi tiết ``ngầm định'' như thang
+khởi tạo tham số.
 
 \subsection{Triệu chứng: cross-entropy ban đầu bất thường}
 
-Trong lần \emph{smoke run} đầu tiên (512 mẫu, 2 epoch, trước khi có bất kỳ
-bước huấn luyện nào tác động), cross-entropy đo ở batch đầu tiên của hai
-decoder lệch nhau rất xa: LSTM+Bahdanau khoảng \textbf{13,0}, trong khi
-Transformer khoảng \textbf{267,6}. Với $V = 2.539$ và nhãn được làm mượt (label
-smoothing $0{,}1$), cross-entropy của một mô hình \emph{chưa học gì} --- tương
-đương đoán gần như đều trên $V$ lớp --- được kỳ vọng xấp xỉ
+Trong lần \emph{smoke run} đầu tiên, cross-entropy đo ở batch đầu tiên (trước
+khi học) của hai decoder lệch nhau rất xa: LSTM+Bahdanau khoảng \textbf{13,0},
+Transformer khoảng \textbf{267,6}. Với $V = 2.539$ và label smoothing $0{,}1$,
+cross-entropy của một mô hình \emph{chưa học gì} được kỳ vọng xấp xỉ
 \begin{equation}
 	\text{CE}_{\text{kỳ vọng}} \approx \ln V + \text{(hiệu chỉnh nhỏ do
 	smoothing)} \approx \ln(2.539) \approx 7{,}84 \;\Rightarrow\; \approx 7{,}9.
 \end{equation}
-Cả hai con số quan sát được (13,0 và 267,6) đều cao hơn hẳn mức kỳ vọng này,
-và mức chênh giữa hai kiến trúc (LSTM lệch nhẹ, Transformer lệch gần 34 lần)
-cho thấy nguyên nhân không phải ngẫu nhiên mà nằm ở một khác biệt hệ thống
-giữa hai cách cài đặt.
+Cả hai con số quan sát đều vượt mức kỳ vọng, và mức chênh giữa hai kiến trúc
+(LSTM lệch nhẹ, Transformer lệch gần 34 lần) cho thấy nguyên nhân nằm ở một
+khác biệt hệ thống giữa hai cách cài đặt.
 
 \subsection{Nguyên nhân: weight tying nhân cái khởi tạo mặc định lên logits}
 
-Cả hai decoder tie trọng số embedding với tầng đầu ra
-(\S\ref{sec:decoder-detail}): $\text{logits} = h\,E^\top$, với $E \in
-\mathbb{R}^{V\times D}$ là chính ma trận embedding. \texttt{torch.nn.Embedding}
-mặc định khởi tạo $E \sim \mathcal{N}(0,1)$ --- một lựa chọn hợp lý \emph{nếu}
-embedding chỉ dùng để tra cứu, nhưng có hại khi $E$ đồng thời là ma trận chiếu
-ra logits.
-
-Với Transformer, kiến trúc pre-norm đưa $h$ qua $\text{LN}_{\text{final}}$
-ngay trước khi nhân với $E^\top$ (công thức cuối
-mục~\ref{sec:decoder-detail}). LayerNorm chuẩn hoá mỗi vector $h$ về trung
-bình 0, phương sai 1 trên $D$ chiều, tức mỗi thành phần $h_j \sim
-\mathcal{O}(1)$. Với $E$ khởi tạo $\mathcal{N}(0,1)$, mỗi thành phần $E_{i,j}$
-cũng $\mathcal{O}(1)$ và độc lập với $h$, nên với mỗi từ $i$:
+Cả hai decoder tie trọng số: $\text{logits} = h\,E^\top$
+(\S\ref{sec:decoder-detail}), mà \texttt{torch.nn.Embedding} mặc định khởi tạo
+$E \sim \mathcal{N}(0,1)$ --- hợp lý nếu $E$ chỉ dùng để tra cứu, có hại khi
+$E$ đồng thời là ma trận chiếu ra logits. Với Transformer, pre-norm đưa $h$
+qua $\text{LN}_{\text{final}}$ ngay trước khi nhân $E^\top$: mỗi thành phần
+$h_j$ được chuẩn hoá về phương sai 1, nên với $E_{i,j} \sim \mathcal{N}(0,1)$
+độc lập:
 \begin{align}
 	\text{Var}(\text{logit}_i) &= \text{Var}\Big(\sum_{j=1}^{D} h_j E_{i,j}\Big)
 	\approx D \cdot \text{Var}(h_j)\cdot\text{Var}(E_{i,j}) \approx D, \\
 	\text{std}(\text{logit}_i) &\approx \sqrt{D} = \sqrt{512} \approx 22{,}6.
 \end{align}
-Logits có độ lệch chuẩn $\approx 22,6$ thay vì $\mathcal{O}(1)$ khiến phân phối
-softmax gần như one-hot \emph{ngẫu nhiên} (không phải one-hot đúng nhãn) ---
-cross-entropy trung bình bùng nổ, đúng như quan sát $267,6 \gg 7,9$. LSTM ít bị
-ảnh hưởng hơn nhiều vì $h_t$ ở đây là trạng thái ẩn của \texttt{LSTMCell}, đi
-qua các cổng sigmoid và $\tanh$ --- biên độ mỗi thành phần bị nén về khoảng
-$(-1,1)$ với phương sai thực tế nhỏ hơn 1 khá nhiều (không có LayerNorm chuẩn
-hoá về đúng phương sai 1 như phía Transformer), nên $\text{std}(\text{logit})$
-tuy vẫn lớn hơn bình thường nhưng không bùng nổ theo $\sqrt{D}$ --- khớp với
-mức lệch nhẹ hơn nhiều (13,0 so với 267,6).
+Logits có độ lệch chuẩn $\approx 22,6$ thay vì $\mathcal{O}(1)$ khiến softmax
+gần như one-hot \emph{ngẫu nhiên} --- cross-entropy bùng nổ, đúng như quan sát
+$267,6 \gg 7,9$. LSTM ít bị ảnh hưởng hơn vì $h_t$ đi qua cổng sigmoid và
+$\tanh$, biên độ bị nén về $(-1,1)$ với phương sai nhỏ hơn 1 nhiều (không có
+LayerNorm chuẩn hoá về đúng phương sai 1), nên $\text{std}(\text{logit})$
+không bùng nổ theo $\sqrt{D}$ --- khớp với mức lệch nhẹ hơn (13,0 so với 267,6).
 
-\subsection{Giải pháp và kết quả sau khi sửa}
+\subsection{Giải pháp và bài học}
 
-Sửa bằng cách khởi tạo embedding (và positional embedding của Transformer)
-theo kiểu GPT-2/BERT: $E \sim \mathcal{N}(0,\,0{,}02^2)$ thay vì
-$\mathcal{N}(0,1)$, đồng thời gán 0 cho hàng ứng với \texttt{<pad>} ngay tại
-lúc khởi tạo (để token đệm không mang thông tin giả trước khi có gradient nào
-chạy qua). Sau khi sửa, cross-entropy tại đầu smoke run của cả hai decoder hội
-tụ đúng về vùng kỳ vọng: LSTM $\approx 7{,}84$, Transformer $\approx 7{,}95$ ---
-sai khác nhỏ còn lại đến từ các tầng khác (dropout, chiếu ảnh) chứ không còn
-do thang khởi tạo embedding. Cả hai sau đó giảm đều qua các epoch của smoke
-run (2 epoch, 512 mẫu): LSTM $7{,}53 \to 6{,}71$; Transformer $7{,}93 \to
-7{,}90$ --- xác nhận gradient chảy đúng hướng, không còn hiện tượng bùng nổ ở
-bước đầu.
-
-\subsection{Bài học}
-
-So sánh công bằng hai kiến trúc (mục tiêu chính của đồ án, \S3.3) không chỉ
-đòi hỏi giữ cố định các siêu tham số hiển thị (seed, batch size, optimizer)
-mà còn cả những chi tiết ``ngầm định'' nằm sâu trong cách PyTorch khởi tạo
-tầng mặc định --- ở đây là thang khởi tạo của embedding khi nó được tie với
-tầng đầu ra \autocite{press2017using}. Một kiến trúc (Transformer, do có
-LayerNorm cuối theo kiểu pre-norm \autocite{vaswani2017attention}) có thể lộ
-lỗi rõ ràng hơn kiến trúc kia dù cả hai cùng mắc lỗi như nhau, khiến việc chẩn
-đoán dễ quy nhầm cho ``Transformer khó train hơn'' thay vì đúng nguyên nhân kỹ
-thuật. Hai unit test hồi quy
-(\texttt{test\_embedding\_init\_nho\_khi\_tie\_weight} ở cả
-\texttt{test\_lstm\_decoder.py} và \texttt{test\_transformer\_decoder.py})
-được thêm ngay sau khi sửa để khóa lại bất biến này --- kiểm tra độ lệch chuẩn
-của bảng embedding đủ nhỏ ($< 0,1$) và hàng \texttt{<pad>} bằng 0 tại lúc khởi
-tạo, tránh lỗi tái diễn nếu decoder được viết lại sau này.
+Sửa bằng khởi tạo kiểu GPT-2/BERT: $E \sim \mathcal{N}(0,\,0{,}02^2)$ cho
+embedding (và positional embedding), gán 0 cho hàng \texttt{<pad>} ngay lúc
+khởi tạo. Sau khi sửa, cross-entropy đầu smoke run hội tụ đúng vùng kỳ vọng:
+LSTM $\approx 7{,}84$, Transformer $\approx 7{,}95$, rồi giảm đều qua các epoch
+--- gradient chảy đúng hướng, hết bùng nổ. Bài học: so sánh công bằng không
+chỉ đòi giữ cố định siêu tham số hiển thị (seed, batch size, optimizer) mà cả
+chi tiết ``ngầm định'' trong khởi tạo mặc định của PyTorch khi tie weight
+\autocite{press2017using}; một kiến trúc (Transformer, do có LayerNorm cuối
+pre-norm) có thể lộ lỗi rõ hơn kiến trúc kia dù cả hai cùng mắc, khiến chẩn
+đoán dễ quy nhầm cho ``Transformer khó train hơn''. Hai unit test hồi quy
+(\texttt{test\_embedding\_init\_nho\_khi\_tie\_weight} ở cả hai file test
+decoder) khóa lại bất biến này: độ lệch chuẩn embedding $< 0,1$ và hàng
+\texttt{<pad>} bằng 0 tại lúc khởi tạo.
 
 \section{Mở rộng: tinh chỉnh bằng SCST}
 \label{sec:scst-results}
@@ -418,31 +367,27 @@ hòa quanh một cực trị địa phương của reward.
 
 \textbf{Được gì.} Lợi ích rõ nhất nằm đúng nơi cơ chế self-critical nhắm tới:
 giải mã \emph{greedy}, với CIDEr $+0{,}010$ (0,536 $\to$ 0,546) và mọi BLEU đều
-nhích lên (B-1 0,630 --- cao nhất toàn bảng~\ref{tab:main-results}). Điều này
-không ngẫu nhiên: trong SCST, gradient có dấu dương khi câu lấy mẫu tốt hơn câu
-greedy của \emph{chính mô hình hiện tại} --- tức mô hình được huấn luyện trực
-tiếp để ``câu greedy của tôi phải khó bị vượt qua''. SCST vì vậy là cách nâng
-chất lượng ở chế độ suy luận rẻ nhất (greedy, không cần giữ $B$ giả thuyết),
-hữu ích khi triển khai có ràng buộc độ trễ.
+nhích lên (B-1 0,630 --- cao nhất toàn bảng~\ref{tab:main-results}). Không
+ngẫu nhiên: gradient SCST có dấu dương khi câu lấy mẫu tốt hơn câu greedy của
+\emph{chính mô hình hiện tại} --- mô hình được huấn luyện trực tiếp để ``câu
+greedy của tôi phải khó bị vượt qua''. SCST vì vậy nâng chất lượng ở chế độ suy
+luận rẻ nhất, hữu ích khi triển khai có ràng buộc độ trễ.
 
 \textbf{Mất gì.} Khi đã dùng beam search, biên lợi gần như biến mất: beam 3 chỉ
-còn $+0{,}001$ CIDEr, beam 5 còn $+0{,}002$. Beam search vốn đã ``vớt lại'' phần
+còn $+0{,}001$ CIDEr, beam 5 còn $+0{,}002$ --- beam vốn đã ``vớt lại'' phần
 lớn khoảng cách giữa greedy và tiềm năng của phân phối đã học, nên hai kỹ thuật
-này chồng lấn nhau về lợi ích. Trong khi đó, chi phí mỗi bước SCST cao hơn hẳn
-teacher forcing: phải lấy mẫu trọn câu, giải mã greedy trọn câu, rồi chấm CIDEr
-cho từng mẫu trong batch. Với hệ có sẵn beam search, 3 epoch SCST trên bộ dữ
-liệu này là một khoản đầu tư lợi suất thấp --- kết luận thực nghiệm quan trọng
-không kém một cải thiện lớn.
+chồng lấn về lợi ích. Trong khi đó, mỗi bước SCST đắt hơn hẳn teacher forcing
+(lấy mẫu trọn câu, giải mã greedy trọn câu, chấm CIDEr từng mẫu). Với hệ có sẵn
+beam search, 3 epoch SCST trên bộ dữ liệu này là khoản đầu tư lợi suất thấp ---
+kết luận thực nghiệm quan trọng không kém một cải thiện lớn.
 
 \textbf{Khoảng cách reward train--test.} CIDEr greedy trên tập huấn luyện đạt
 $\approx$1,27 trong khi trên tập kiểm tra chỉ 0,546. Một phần là overfitting
-thông thường (mô hình đã học thuộc phong cách 5 câu tham chiếu của chính ảnh
-huấn luyện --- các cụm n-gram TF--IDF cao dễ khớp lại), một phần là bản chất
-của tối ưu reward: chính sách được đẩy về những mẫu câu ăn điểm CIDEr trên phân
-phối tham chiếu \emph{đã thấy}, và lợi thế đó không chuyển hết sang ảnh mới.
-Khoảng cách hơn hai lần này là lời nhắc rằng số đo reward trên train của một
-vòng RL không phải là ước lượng chất lượng --- chỉ có tập kiểm tra giữ kín mới
-trả lời được.
+thông thường (học thuộc phong cách 5 câu tham chiếu của ảnh huấn luyện), một
+phần là bản chất của tối ưu reward: chính sách bị đẩy về mẫu câu ăn điểm CIDEr
+trên phân phối tham chiếu \emph{đã thấy}, lợi thế không chuyển hết sang ảnh
+mới. Khoảng cách hơn hai lần này nhắc rằng reward trên train của một vòng RL
+không phải ước lượng chất lượng --- chỉ tập kiểm tra giữ kín mới trả lời được.
 
 \section{Thí nghiệm mở rộng: kiểm tra độ vững của kết luận}
 \label{sec:ext}
@@ -535,7 +480,7 @@ cài đặt beam search).
 
 \begin{figure}[H]
 	\centering
-	\includegraphics[width=0.8\textwidth]{figs/results/beam_curve.png}
+	\includegraphics[width=0.72\textwidth]{figs/results/beam_curve.png}
 	\caption{CIDEr trên tập kiểm tra theo beam size $k$. LSTM tăng đơn điệu
 	và bão hòa dần; Transformer đạt đỉnh tại $k{=}3$ rồi tụt nhẹ.}
 	\label{fig:beam-curve}
@@ -616,15 +561,11 @@ trước khi tuyên bố người thắng.
 	      của khối Bahdanau: tính theo ``CIDEr trên mỗi tham số thêm vào'',
 	      attention là khoản đầu tư hiệu quả nhất toàn đồ án.
 	\item \textbf{Đặt cạnh đồ án giữa kỳ:} Medical VQA (phân loại) và captioning
-	      (sinh chuỗi) là hai nhánh đầu ra của cùng meta-kiến trúc đa phương thức;
-	      điểm chung là khối fusion bằng attention, điểm khác là không gian đầu ra
-	      --- nhãn rời rạc so với chuỗi mở. Kết quả hai đồ án phản chiếu đúng
-	      khác biệt đó: ở VQA, mọi phức tạp dồn vào việc trộn hai phương thức
-	      trước một quyết định duy nhất; ở captioning, chuỗi mở kéo theo cả một
-	      tầng vấn đề mới không tồn tại bên phân loại --- chiến lược giải mã
-	      (greedy/beam làm lệch CIDEr tới 0,053 trên \emph{cùng một} mô hình),
-	      vòng lặp cụm từ, và khả năng tối ưu trực tiếp metric chuỗi bằng RL
-	      (SCST). Nhìn từ trên xuống, ``đầu ra là gì'' quyết định phần lớn độ
-	      khó kỹ thuật của một hệ đa phương thức, hơn cả việc hai phương thức
-	      được trộn thế nào.
+	      (sinh chuỗi) là hai nhánh đầu ra của cùng meta-kiến trúc đa phương
+	      thức, chung khối fusion bằng attention, khác không gian đầu ra. Chuỗi
+	      mở kéo theo cả một tầng vấn đề không tồn tại bên phân loại: chiến
+	      lược giải mã (greedy/beam làm lệch CIDEr tới 0,053 trên \emph{cùng
+	      một} mô hình), vòng lặp cụm từ, và tối ưu trực tiếp metric chuỗi bằng
+	      RL (SCST). ``Đầu ra là gì'' quyết định phần lớn độ khó kỹ thuật của
+	      một hệ đa phương thức, hơn cả việc hai phương thức được trộn thế nào.
 \end{itemize}

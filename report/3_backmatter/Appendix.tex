@@ -6,102 +6,44 @@
 \label{app:repro}
 
 Toàn bộ kết quả trong chương~\ref{chap:experiments} tái lập được bằng một
-script duy nhất từ gốc repo (script idempotent theo checkpoint --- chạy lại sau
-khi đứt phiên sẽ tiếp tục từ run chưa xong, mục 3.6):
-
-\begin{itemize}
-	\item \texttt{./final/run\_all.sh} --- pipeline đầy đủ 13 bước: tải
-	      Flickr8k, xây vocab, trích đặc trưng ResNet-50, ba run huấn luyện
-	      (\texttt{lstm}, \texttt{transformer}, \texttt{lstm\_noattn}),
-	      evaluate greedy/beam3/beam5, và toàn bộ hình trực quan hóa;
-	\item \texttt{./final/run\_all.sh -{}-smoke} --- kiểm tra pipeline nhanh
-	      (512 mẫu, 2 epoch, chấm 32 ảnh) trước khi chạy thật trên máy GPU;
-	\item \texttt{python -m final.scst -{}-checkpoint final/checkpoints/lstm.pt}
-	      --- giai đoạn mở rộng SCST (mục~\ref{sec:scst-results});
-	\item \texttt{python -m pytest final/tests} --- chạy 45 unit test
-	      (mục~\ref{app:tests}).
-\end{itemize}
-
-Mỗi run ghi ra \texttt{final/outputs/<run>/} các artifact:
-\texttt{config.json} (toàn bộ siêu tham số của run --- nguồn của
+script duy nhất từ gốc repo: \texttt{./final/run\_all.sh} chạy pipeline đầy đủ
+13 bước (tải Flickr8k, xây vocab, trích đặc trưng ResNet-50, ba run huấn luyện
+\texttt{lstm}/\texttt{transformer}/\texttt{lstm\_noattn}, evaluate
+greedy/beam3/beam5, hình trực quan hóa); cờ \texttt{-{}-smoke} kiểm tra nhanh
+pipeline (512 mẫu, 2 epoch) trước khi chạy thật trên máy GPU. Script idempotent
+theo checkpoint --- chạy lại sau khi đứt phiên sẽ tiếp tục từ run chưa xong
+(mục 3.6). Giai đoạn SCST chạy bằng \texttt{python -m final.scst
+-{}-checkpoint final/checkpoints/lstm.pt}; toàn bộ unit test chạy bằng
+\texttt{python -m pytest final/tests}. Mỗi run ghi ra
+\texttt{final/outputs/<run>/}: \texttt{config.json} (siêu tham số --- nguồn của
 bảng~\ref{tab:hyperparams}), \texttt{history.json} (loss theo epoch + caption
-mẫu), \texttt{eval.md} và \texttt{hyps\_*.json} (điểm số và toàn bộ câu sinh
-ra), cùng các hình \texttt{curves.png}, \texttt{attention\_*.png}.
+mẫu), \texttt{eval.md} và \texttt{hyps\_*.json} (điểm số và toàn bộ câu sinh),
+cùng các hình \texttt{curves.png}, \texttt{attention\_*.png}.
 
 \section{Danh sách 45 unit test theo nhóm bất biến}
 \label{app:tests}
 
-Mỗi nhóm dưới đây liệt kê bất biến được khóa và tên các test tương ứng
-(tiền tố \texttt{test\_} lược bỏ cho gọn).
-
-\begin{description}[leftmargin=0pt,itemsep=0.15\baselineskip]
-	\small
-	\item[Config (5) --- \texttt{test\_config.py}.] Mặc định đúng spec;
-	lr/warmup tự chọn theo decoder; run name và đường dẫn artifact tự suy ra;
-	decoder lạ bị chặn. {\footnotesize\texttt{defaults\_theo\_spec},
-	\texttt{lr\_va\_warmup\_tu\_dong\_theo\_decoder},
-	\texttt{run\_name\_tu\_dong}, \texttt{duong\_dan\_artifact},
-	\texttt{decoder\_khong\_hop\_le\_bi\_chan}.}
-	\item[Vocab (7) --- \texttt{test\_vocab.py}.] Tokenize lowercase, bỏ dấu
-	câu; 4 id đặc biệt cố định; lọc từ hiếm theo min\_freq; encode cắt đúng
-	ngưỡng và thay \texttt{<unk>}; decode khứ hồi dừng ở \texttt{<eos>}, bỏ
-	\texttt{<unk>}; save/load giữ nguyên.
-	{\footnotesize\texttt{tokenize\_lowercase\_bo\_dau\_cau},
-	\texttt{special\_ids\_co\_dinh}, \texttt{min\_freq\_loc\_tu\_hiem},
-	\texttt{encode\_unk\_va\_truncate}, \texttt{roundtrip\_decode\_dung\_o\_eos},
-	\texttt{decode\_bo\_unk}, \texttt{save\_load\_giu\_nguyen}.}
-	\item[Dữ liệu (5) --- \texttt{test\_dataset.py}, \texttt{test\_download.py}.]
-	Mỗi cặp (ảnh, caption) một mẫu; shape/dtype đúng; chuỗi đầu vào--nhãn lệch
-	nhau đúng một bước; ảnh khớp caption; mỗi ảnh đủ 5 câu, giữ thứ tự.
-	{\footnotesize\texttt{moi\_cap\_anh\_caption\_la\_mot\_mau},
-	\texttt{shape\_va\_dtype},
-	\texttt{cap\_in\_cap\_out\_lech\_nhau\_dung\_mot\_buoc},
-	\texttt{anh\_dung\_voi\_caption},
-	\texttt{extract\_captions\_giu\_thu\_tu\_va\_du\_5\_cau}.}
-	\item[Đặc trưng ảnh (3) --- \texttt{test\_features.py}.] Pool
-	$7\times7\times2048 \to 49\times2048$ giữ đúng thứ tự không gian; transform
-	ra đúng kích thước; shape đầu ra của backbone thật.
-	{\footnotesize\texttt{pool\_to\_regions\_shape\_va\_thu\_tu},
-	\texttt{transform\_ra\_dung\_kich\_thuoc}, \texttt{backbone\_shape\_that}.}
-	\item[LSTM decoder (6) --- \texttt{test\_lstm\_decoder.py}.] Shape từng
-	tầng; trọng số Bahdanau có tổng bằng 1; tắt attention thì trọng số đều; tie
-	weight embedding--output; embedding init nhỏ + hàng \texttt{<pad>} bằng 0
-	(\S\ref{sec:embedding-init}). {\footnotesize\texttt{image\_projection\_shape},
-	\texttt{bahdanau\_weights\_tong\_bang\_1}, \texttt{lstm\_decoder\_shapes},
-	\texttt{khong\_attention\_thi\_trong\_so\_deu},
-	\texttt{tie\_weight\_embedding\_va\_output},
-	\texttt{embedding\_init\_nho\_khi\_tie\_weight}.}
-	\item[Transformer decoder (5) --- \texttt{test\_transformer\_decoder.py}.]
-	Shape; mặt nạ nhân quả --- token tương lai không ảnh hưởng quá khứ; tie
-	weight; embedding init nhỏ; chuỗi quá \texttt{max\_len} bị chặn.
-	{\footnotesize\texttt{shapes},
-	\texttt{causal\_tuong\_lai\_khong\_anh\_huong\_qua\_khu},
-	\texttt{tie\_weight}, \texttt{embedding\_init\_nho\_khi\_tie\_weight},
-	\texttt{qua\_max\_len\_bi\_chan}.}
-	\item[Giải mã (5) --- \texttt{test\_decoding.py}.] Greedy dừng đúng
-	\texttt{<eos>} và không vượt \texttt{max\_len}; beam $B{=}1$ trùng greedy
-	trên model thật; decode khôi phục trạng thái train; build model + đếm tham
-	số đúng. {\footnotesize\texttt{greedy\_sinh\_dung\_chuoi\_va\_dung\_o\_eos},
-	\texttt{greedy\_khong\_vuot\_max\_len},
-	\texttt{beam\_1\_bang\_greedy\_tren\_model\_that},
-	\texttt{decode\_khoi\_phuc\_trang\_thai\_train},
-	\texttt{build\_model\_transformer\_va\_dem\_tham\_so}.}
-	\item[Huấn luyện (3) --- \texttt{test\_train.py}.] Scheduler warmup tăng
-	rồi cosine giảm; không warmup thì bắt đầu từ đỉnh; loss bỏ qua
-	\texttt{<pad>}. {\footnotesize\texttt{scheduler\_warmup\_tang\_roi\_cosine\_giam},
-	\texttt{scheduler\_khong\_warmup\_bat\_dau\_tu\_dinh},
-	\texttt{criterion\_bo\_qua\_pad}.}
-	\item[Đánh giá (3) --- \texttt{test\_evaluate.py}.] Câu trùng khớp tham
-	chiếu điểm cao hơn câu sai; metric đủ key, nằm trong khoảng hợp lệ; load
-	checkpoint bỏ qua đường dẫn tuyệt đối của máy huấn luyện cũ.
-	{\footnotesize\texttt{hyp\_trung\_khop\_diem\_cao\_hon\_hyp\_sai},
-	\texttt{metric\_du\_key\_va\_trong\_khoang},
-	\texttt{load\_model\_from\_checkpoint\_bo\_qua\_duong\_dan\_may\_cu}.}
-	\item[SCST (2) --- \texttt{test\_scst.py}.] Phần thưởng CIDEr xếp hạng
-	đúng thứ tự; sample decode trả log-prob âm, đúng shape.
-	{\footnotesize\texttt{cider\_rewards\_thu\_tu\_dung},
-	\texttt{sample\_decode\_logprob\_am\_va\_dung\_shape}.}
-	\item[Trực quan hóa (1) --- \texttt{test\_visualize.py}.] Hình attention
-	tạo đúng số ô: 1 ô ảnh gốc + 1 ô cho mỗi từ sinh ra.
-	{\footnotesize\texttt{attention\_figure\_tao\_dung\_so\_o}.}
-\end{description}
+Mỗi nhóm dưới đây tóm tắt bất biến được khóa (số test trong ngoặc; file test
+trong \texttt{final/tests/}): \textbf{Config} (5) --- mặc định đúng spec,
+lr/warmup tự chọn theo decoder, đường dẫn artifact tự suy ra, decoder lạ bị
+chặn; \textbf{Vocab} (7) --- tokenize lowercase bỏ dấu câu, 4 id đặc biệt cố
+định, lọc từ hiếm theo min\_freq, encode cắt ngưỡng và thay \texttt{<unk>},
+decode khứ hồi dừng ở \texttt{<eos>}, save/load giữ nguyên; \textbf{Dữ liệu}
+(5) --- mỗi cặp (ảnh, caption) một mẫu, shape/dtype đúng, chuỗi vào--nhãn lệch
+đúng một bước, ảnh khớp caption, đủ 5 câu giữ thứ tự; \textbf{Đặc trưng ảnh}
+(3) --- pool $7\times7\times2048 \to 49\times2048$ giữ thứ tự không gian,
+transform và backbone ra đúng kích thước; \textbf{LSTM decoder} (6) --- shape
+từng tầng, trọng số Bahdanau tổng bằng 1, tắt attention thì trọng số đều, tie
+weight, embedding init nhỏ + hàng \texttt{<pad>} bằng 0
+(\S\ref{sec:embedding-init}); \textbf{Transformer decoder} (5) --- shape, mặt
+nạ nhân quả (token tương lai không ảnh hưởng quá khứ), tie weight, embedding
+init nhỏ, chuỗi quá \texttt{max\_len} bị chặn; \textbf{Giải mã} (5) --- greedy
+dừng đúng \texttt{<eos>} và không vượt \texttt{max\_len}, beam $B{=}1$ trùng
+greedy trên model thật, decode khôi phục trạng thái train, build model + đếm
+tham số đúng; \textbf{Huấn luyện} (3) --- scheduler warmup tăng rồi cosine
+giảm, không warmup thì bắt đầu từ đỉnh, loss bỏ qua \texttt{<pad>};
+\textbf{Đánh giá} (3) --- câu trùng tham chiếu điểm cao hơn câu sai, metric đủ
+key trong khoảng hợp lệ, load checkpoint bỏ qua đường dẫn máy cũ; \textbf{SCST}
+(2) --- phần thưởng CIDEr xếp hạng đúng, sample decode trả log-prob âm đúng
+shape; \textbf{Trực quan hóa} (1) --- hình attention đúng số ô: 1 ô ảnh gốc +
+1 ô mỗi từ sinh ra.
