@@ -82,10 +82,11 @@ def train(cfg: PretrainConfig, device=None, resume=None, log_every=10):
         ck = load_ckpt(resume, device)
         model.load_state_dict(ck["model"])
         optimizer.load_state_dict(ck["optimizer"])
-        gen.set_state(ck["gen_state"])
+        # map_location đẩy các tensor RNG lên device; set_state cần CPU ByteTensor
+        gen.set_state(ck["gen_state"].cpu())
         torch.set_rng_state(ck["torch_rng"].cpu())
         if ck["cuda_rng"] is not None and torch.cuda.is_available():
-            torch.cuda.set_rng_state_all(ck["cuda_rng"])
+            torch.cuda.set_rng_state_all([t.cpu() for t in ck["cuda_rng"]])
         start = ck["step"]
         print(f"resume từ step {start}")
     if cfg.compile and device_type == "cuda":

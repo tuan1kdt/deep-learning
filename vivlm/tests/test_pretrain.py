@@ -37,6 +37,16 @@ def test_train_writes_ckpt_and_log(tmp_path):
     assert "train" in log and "val" in log
 
 
+def test_ckpt_key_set(tmp_path):
+    # khóa contract checkpoint mà Task 7/8/10 phụ thuộc — đúng 7 key, không dư/thiếu
+    cfg = _tiny_cfg(tmp_path)
+    train(cfg, device="cpu")
+    ck = torch.load(cfg.out_dir + "/latest.pt", weights_only=False)
+    assert set(ck.keys()) == {
+        "model", "optimizer", "step", "gpt_config",
+        "gen_state", "torch_rng", "cuda_rng"}
+
+
 def test_resume_equivalence(tmp_path):
     (tmp_path / "a").mkdir()
     (tmp_path / "b").mkdir()
