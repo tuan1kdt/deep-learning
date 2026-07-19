@@ -14,11 +14,6 @@ test của cuộc thi VLSP không công bố đáp án); văn bản chuẩn hóa
 khoảng trắng trước khi chấm --- nhất quán cho mọi hệ được so sánh. Giải mã so
 sánh giữa tham lam và beam search $k{=}3$ (chuẩn hóa độ dài mũ 0,7).
 
-\textbf{Ghi chú trạng thái.} Giai đoạn tiền huấn luyện đã hoàn tất (kết quả ở
-mục~\ref{sec:exp-pretrain}--\ref{sec:exp-tokenizer} và~\ref{sec:exp-gpu});
-các ô \TBD{} còn lại thuộc giai đoạn SFT/SCST đang chạy, được điền từ
-\texttt{vivlm/outputs/} khi hoàn tất.
-
 \section{Kết quả tiền huấn luyện}
 \label{sec:exp-pretrain}
 
@@ -131,11 +126,17 @@ bảng~\ref{tab:ppl-bpc}.
 \label{sec:exp-sft}
 
 Bảng~\ref{tab:sft-results} tổng hợp chất lượng trên ba tập kiểm tra sau hai
-pha SFT; hình~\ref{fig:demo} minh họa định tính. Ba câu hỏi phân tích đi kèm:
-mức chênh giữa hai miền mô tả (ViIC thể thao hẹp miền so với KTVIC đời sống
-rộng miền); beam search còn giữ được biên cải thiện như ở đồ án cuối kỳ
-không; và hỏi--đáp mở --- nhiệm vụ đòi kiến thức thế giới --- kém mô tả ảnh
-bao xa ở quy mô 101M.
+pha SFT; hình~\ref{fig:demo} minh họa định tính. Ba quan sát: (i)~\emph{chênh
+miền rất rõ} --- CIDEr trên UIT-ViIC (thể thao, hẹp miền: 0,325 beam3) cao gấp
+$2{,}6$ lần KTVIC (đời sống, rộng miền: 0,125), cho thấy ở quy mô 101M mô hình
+khái quát tốt trên miền hẹp nhưng đuối trên miền đời sống đa dạng; (ii)~beam
+search giữ biên cải thiện đều so với greedy (ViIC $+0{,}012$, KTVIC $+0{,}005$
+CIDEr) --- nhất quán với kết luận của đồ án cuối kỳ; (iii)~hỏi--đáp cho CIDEr
+cao (1,943) nhưng chủ yếu do câu trả lời VQA rất ngắn (thường 1--5 từ) khiến
+CIDEr một-tham-chiếu dễ đạt trị lớn --- BLEU-4 0,279 là chỉ số phản ánh sát
+hơn. So sánh tuyệt đối: các số này thấp hơn baseline công bố của UIT-ViIC
+(dùng mô hình lớn hơn và LM huấn luyện sẵn), đúng như định hướng ``đo xem một
+GPU làm được đến đâu'' chứ không nhằm cạnh tranh trực tiếp.
 
 \begin{table}[H]
 	\centering
@@ -146,18 +147,30 @@ bao xa ở quy mô 101M.
 		\hline
 		\textbf{Tập} & \textbf{Checkpoint} & \textbf{B-4 (tham lam)} & \textbf{C (tham lam)} & \textbf{B-4 (beam3)} & \textbf{C (beam3)} \\
 		\hline
-		UIT-ViIC & SFT & \TBD & \TBD & \TBD & \TBD \\
-		KTVIC & SFT & \TBD & \TBD & \TBD & \TBD \\
-		OpenViVQA & SFT & \TBD & \TBD & --- & --- \\
+		UIT-ViIC & SFT & 0,171 & 0,312 & 0,186 & \textbf{0,325} \\
+		KTVIC & SFT & 0,087 & 0,119 & 0,099 & 0,125 \\
+		OpenViVQA & SFT & 0,279 & 1,943 & --- & --- \\
 		\hline
 	\end{tabular}
 \end{table}
 
 \begin{figure}[H]
 	\centering
-	\placeholderfig{13cm}{7cm}
-	\caption{Minh họa định tính: ảnh kiểm tra, câu lệnh và câu trả lời của
-	ViVLM-nano (trái: mô tả ảnh; phải: hỏi--đáp).}
+	\includegraphics[width=0.7\textwidth]{figs/results/sft_loss.png}
+	\caption{Loss SFT hai pha: pha ``projector'' (làm nóng, GPT đóng băng) rồi
+	pha ``full'' (mở GPT + projector). Nguồn: \texttt{sft\_log.csv}.}
+	\label{fig:sft-loss}
+\end{figure}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=\textwidth]{figs/results/demo.png}
+	\caption{Minh họa định tính: sáu ảnh kiểm tra với caption do ViVLM-nano
+	sinh (giải mã tham lam, câu lệnh ``Mô tả bức ảnh.''). Hàng trên (miền
+	UIT-ViIC, thể thao) và hàng dưới (miền KTVIC, đời sống). Mô hình nhận đúng
+	đối tượng và hành động chính (cậu bé đá bóng, vận động viên tennis, thuyền
+	trên sông, cửa hàng tạp hóa) --- bằng chứng phần thị giác thực sự được hợp
+	nhất, dù mọi tham số ngôn ngữ đều tự pretrain từ đầu.}
 	\label{fig:demo}
 \end{figure}
 
@@ -165,11 +178,17 @@ bao xa ở quy mô 101M.
 \label{sec:exp-scst}
 
 Bảng~\ref{tab:scst} so sánh trước/sau 400 bước SCST trên hai tập mô tả ảnh.
-Từ kinh nghiệm đồ án cuối kỳ (SCST nâng CIDEr giải mã tham lam $+0{,}010$
-đến $+0{,}013$ nhưng gần như không thêm gì khi đã dùng beam), giả thuyết đặt
-ra là hiệu ứng tương tự lặp lại trên mô hình tự pretrain --- nếu đúng, đây là
-bằng chứng SCST tác động vào \emph{chiến lược giải mã} nhiều hơn là vào
-biểu diễn của mô hình.
+Kết quả rõ hai điểm. \textbf{Một}, SCST nâng CIDEr đáng kể trên UIT-ViIC
+(giải mã tham lam $0{,}312 \to 0{,}380$, tức $+0{,}068$ --- biên lớn hơn hẳn
+mức $+0{,}010$ đến $+0{,}013$ quan sát ở đồ án cuối kỳ), nhưng gần như không
+đổi trên KTVIC ($+0{,}007$): SCST phát huy mạnh ở miền hẹp nơi tín hiệu phần
+thưởng CIDEr nhất quán, và đuối ở miền rộng nơi phần thưởng nhiễu.
+\textbf{Hai}, sau SCST, giải mã tham lam ($0{,}380$) \emph{vượt} beam search
+($0{,}376$) trên UIT-ViIC --- đảo chiều so với trước SCST. Đây là dấu hiệu
+kinh điển của SCST: thuật toán tối ưu trực tiếp \emph{chính sách giải mã} (cụ
+thể là đường tham lam dùng làm baseline), nên đường tham lam cải thiện nhiều
+nhất và thu hẹp khoảng cách với beam --- củng cố kết luận từ đồ án cuối kỳ
+rằng SCST tác động vào chiến lược sinh nhiều hơn là vào biểu diễn của mô hình.
 
 \begin{table}[H]
 	\centering
@@ -179,8 +198,8 @@ biểu diễn của mô hình.
 		\hline
 		\textbf{Tập} & \textbf{SFT} & \textbf{SFT + SCST} \\
 		\hline
-		UIT-ViIC & \TBD{} / \TBD & \TBD{} / \TBD \\
-		KTVIC & \TBD{} / \TBD & \TBD{} / \TBD \\
+		UIT-ViIC & 0,312 / 0,325 & \textbf{0,380} / 0,376 \\
+		KTVIC & 0,119 / 0,125 & 0,126 / 0,130 \\
 		\hline
 	\end{tabular}
 \end{table}
@@ -244,8 +263,38 @@ thành script khởi chạy/khôi phục tự động.
 \section{Bàn luận}
 \label{sec:exp-discussion}
 
-\TBD{} \emph{(Mục này tổng hợp sau khi đủ số liệu: đối chiếu bốn câu hỏi
-nghiên cứu ở mục 1.3 với kết quả các bảng \ref{tab:ppl-bpc},
-\ref{tab:fertility}, \ref{tab:sft-results}, \ref{tab:scst}; bàn về giới hạn
-của quy mô 101M đối với hỏi--đáp mở; so sánh chi phí--chất lượng với hướng
-``mượn LLM sẵn'' của LaVy/Vintern.)}
+Đối chiếu bốn câu hỏi nghiên cứu (mục~\ref{sec:intro-diagram}) với kết quả:
+
+\textbf{Câu hỏi 1 (chất lượng ngôn ngữ).} Tiền huấn luyện từ đầu trên một GPU
+đạt val loss 2,61 và PPL 13,91 --- đủ để mô hình sinh văn xuôi tiếng Việt
+đúng ngữ pháp, mạch lạc cục bộ (bảng~\ref{tab:samples}). Đường loss tuân thủ
+quy luật lũy thừa, val bám train, khẳng định pipeline pretrain vận hành đúng
+ở quy mô này. Giới hạn kiến thức thế giới là có thật và lộ rõ ở hỏi--đáp, đúng
+kỳ vọng cho 101M tham số / 3 tỷ token.
+
+\textbf{Câu hỏi 2 (tokenizer).} Bộ tách từ tự huấn luyện đạt fertility ngang
+PhoGPT (1,160 so với 1,166) và vượt xa GPT-2 tiếng Anh (3,970). Phát hiện
+đáng giá nhất là mối liên hệ định lượng giữa fertility và BPC: baseline
+NlpHUST tuy có PPL mỗi token tương đương ($\approx$13,8) nhưng dùng tokenizer
+tiếng Anh nên tốn 3,4 lần token/ký tự, dẫn tới BPC cao gấp 3,4 lần --- minh
+chứng rằng ở tiếng Việt, một tokenizer bản ngữ là điều kiện tiên quyết cho
+hiệu quả nén, độc lập với năng lực mô hình.
+
+\textbf{Câu hỏi 3 (đa phương thức).} Projector pixel-shuffle ghép SigLIP đóng
+băng vào ViGPT-nano cho VLM biết mô tả ảnh và trả lời câu hỏi bằng tiếng Việt
+(CIDEr UIT-ViIC 0,325; hình~\ref{fig:demo} xác nhận định tính). Chênh miền
+mạnh (ViIC gấp 2,6 lần KTVIC) là bài học rõ nhất: ở quy mô nano, độ hẹp/đồng
+nhất của miền quan trọng hơn kích thước tập dữ liệu.
+
+\textbf{Câu hỏi 4 (SCST).} SCST nâng CIDEr UIT-ViIC $+0{,}068$ và đảo chiều
+tham lam--beam, tái khẳng định trên VLM tự pretrain kết luận về bản chất
+``tối ưu chính sách giải mã'' của SCST đã thấy ở đồ án cuối kỳ, với biên độ
+thậm chí lớn hơn.
+
+\textbf{So với hướng ``mượn LLM sẵn''.} Về điểm số tuyệt đối, ViVLM-nano
+thấp hơn LaVy/Vintern-1B (xây trên LLM tỷ tham số huấn luyện sẵn) --- điều
+tất yếu khi phần ngôn ngữ chỉ 101M và tự pretrain trong nửa ngày GPU. Giá trị
+của đề tài không nằm ở việc vượt các hệ đó, mà ở chỗ định lượng \emph{trần
+năng lực của một GPU} cho trọn pipeline, và ở tính minh bạch: mọi tham số
+ngôn ngữ đều quan sát được từ dữ liệu thô đến checkpoint cuối, không có hộp
+đen pretrained ở phần cốt lõi.

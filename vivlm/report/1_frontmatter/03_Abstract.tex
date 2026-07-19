@@ -27,8 +27,14 @@ dụng tài nguyên: giai đoạn tiền huấn luyện duy trì mức sử dụ
 và 22,2/24,5\,GB VRAM (91\%) với thông lượng ổn định 99--100 nghìn token/giây
 nhờ \texttt{bfloat16}, FlashAttention và \texttt{torch.compile}
 (so với 34 nghìn token/giây và tràn bộ nhớ ở chế độ eager).
-Kết quả định lượng đầy đủ (perplexity, fertility, CIDEr trước/sau SCST) được
-trình bày trong chương 4. Cùng với đồ án giữa kỳ (Medical VQA --- nhánh phân
+Kết quả chính: tiền huấn luyện đạt perplexity 13,91 (bits-per-character 0,987
+so với 3,329 của baseline GPT-2 tiếng Việt --- chênh lệch đến gần như hoàn
+toàn từ bộ tách từ, được phân tích rõ); bộ tách từ tự huấn luyện đạt fertility
+1,160, ngang PhoGPT (1,166) và vượt xa GPT-2 tiếng Anh (3,970); sau SFT, mô
+hình mô tả ảnh đạt CIDEr 0,325 trên UIT-ViIC và trả lời câu hỏi tiếng Việt về
+ảnh (minh họa định tính xác nhận phần thị giác được hợp nhất thực sự); SCST
+nâng CIDEr UIT-ViIC thêm 0,068 và đảo chiều tham lam--beam đúng bản chất tối
+ưu chính sách giải mã. Cùng với đồ án giữa kỳ (Medical VQA --- nhánh phân
 loại) và đồ án cuối kỳ sinh mô tả ảnh (nhánh sinh có điều kiện), báo cáo này
 lấp phần còn lại của sơ đồ đa phương thức tổng quát của môn học: hợp nhất hai
 luồng token thị giác--ngôn ngữ và chuỗi huấn luyện pretrain--SFT--RL.
