@@ -5,23 +5,20 @@
 
 Báo cáo đã xây dựng và huấn luyện ViVLM-nano --- một mô hình ngôn ngữ--thị
 giác tiếng Việt mà phần ngôn ngữ 101 triệu tham số được tiền huấn luyện từ
-token đầu tiên trên 3,02 tỷ token FineWeb2-HQ (val loss 2,61, PPL 13,91 sau
-9 giờ 41 phút trên một GPU), sau đó hợp nhất thị giác kiểu LLaVA (SigLIP đóng
-băng, projector pixel-shuffle), tinh chỉnh có giám sát hai pha (CIDEr UIT-ViIC
-0,325) và tinh chỉnh học tăng cường SCST (nâng CIDEr thêm 0,068) --- toàn bộ
-trên đúng một GPU 24\,GB, với mức sử dụng GPU gần 100\% và VRAM 91\% suốt giai
-đoạn tiền huấn luyện. Cùng đồ án giữa kỳ (nhánh phân loại) và đồ án cuối kỳ
+token đầu tiên trên 3,02 tỷ token FineWeb2-HQ (val loss 2,61, PPL 13,91), sau
+đó hợp nhất thị giác kiểu LLaVA (SigLIP đóng băng, projector pixel-shuffle),
+tinh chỉnh có giám sát hai pha (CIDEr UIT-ViIC 0,325) và tinh chỉnh học tăng
+cường SCST (nâng CIDEr thêm 0,068) --- toàn bộ ở quy mô một GPU. Cùng đồ án
+giữa kỳ (nhánh phân loại) và đồ án cuối kỳ
 (nhánh sinh có điều kiện đơn phương thức), đề tài khép kín sơ đồ kiến trúc đa
 phương thức của môn học ở phần trung tâm nhất: hợp nhất hai luồng token và
 chuỗi huấn luyện pretrain--SFT--RL.
 
-Về phương pháp làm việc, ba điểm được kiểm chứng là đáng giá: (i)~kỷ luật
+Về phương pháp làm việc, hai điểm được kiểm chứng là đáng giá: (i)~kỷ luật
 kiểm thử (52 unit test ngoại tuyến, bất biến khôi phục checkpoint chính xác
-từng bit) cho phép yên tâm chạy phiên huấn luyện dài trên hạ tầng từ xa kém
-ổn định; (ii)~đo đạc trước khi cam kết --- các phép đo thông lượng ngắn quyết
-định cấu hình micro-batch và phát hiện \texttt{torch.compile} vừa nhanh gấp
-đôi vừa tiết kiệm 30\% bộ nhớ so với eager; (iii)~tách bạch ba giai đoạn bằng
-checkpoint độc lập giúp quy được đóng góp của từng bước vào kết quả cuối.
+từng bit) cho phép yên tâm chạy phiên huấn luyện dài; (ii)~tách bạch ba giai
+đoạn bằng checkpoint độc lập giúp quy được đóng góp của từng bước vào kết quả
+cuối cùng.
 
 \section{Hạn chế}
 

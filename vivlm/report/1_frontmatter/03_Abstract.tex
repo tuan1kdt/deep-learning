@@ -5,7 +5,7 @@ Báo cáo này xây dựng \textbf{ViVLM-nano} --- một mô hình ngôn ngữ--
 (vision--language model, VLM) tiếng Việt cỡ nhỏ mà \emph{toàn bộ phần ngôn ngữ
 được tiền huấn luyện từ token đầu tiên}, thay vì mượn một mô hình ngôn ngữ huấn
 luyện sẵn như các VLM tiếng Việt hiện có (LaVy, Vintern-1B). Hệ thống đi trọn
-vòng đời huấn luyện của một mô hình sinh hiện đại trên đúng một GPU 24\,GB:
+vòng đời huấn luyện của một mô hình sinh hiện đại ở quy mô một GPU:
 (i)~\emph{tiền huấn luyện} một mô hình decoder-only 101 triệu tham số kiến trúc
 Llama-style (RoPE, RMSNorm, SwiGLU) trên 3,02 tỷ token tiếng Việt lọc chất lượng
 từ FineWeb2-HQ, với bộ tách từ BPE 20.480 mục tự huấn luyện;
@@ -20,13 +20,9 @@ Về đo lường, chất lượng ngôn ngữ được theo dõi bằng perplex
 bits-per-character (thước đo trung lập với bộ tách từ, cho phép so sánh công bằng
 với baseline GPT-2 tiếng Việt huấn luyện sẵn); chất lượng đa phương thức đo bằng
 BLEU-4 và CIDEr trên các tập kiểm tra UIT-ViIC, KTVIC và OpenViVQA; hiệu quả của
-bộ tách từ đo bằng fertility so với tokenizer của PhoGPT và GPT-2. Toàn bộ pipeline
-được phát triển kiểu test-driven với 52 unit test chạy ngoại tuyến, checkpoint
-khôi phục chính xác từng bit, và nhật ký GPU ghi mỗi 30 giây làm bằng chứng sử
-dụng tài nguyên: giai đoạn tiền huấn luyện duy trì mức sử dụng GPU xấp xỉ 100\%
-và 22,2/24,5\,GB VRAM (91\%) với thông lượng ổn định 99--100 nghìn token/giây
-nhờ \texttt{bfloat16}, FlashAttention và \texttt{torch.compile}
-(so với 34 nghìn token/giây và tràn bộ nhớ ở chế độ eager).
+bộ tách từ đo bằng fertility so với tokenizer của PhoGPT và GPT-2. Toàn bộ
+pipeline được phát triển kiểu test-driven với 52 unit test chạy ngoại tuyến
+và checkpoint khôi phục chính xác từng bit.
 Kết quả chính: tiền huấn luyện đạt perplexity 13,91 (bits-per-character 0,987
 so với 3,329 của baseline GPT-2 tiếng Việt --- chênh lệch đến gần như hoàn
 toàn từ bộ tách từ, được phân tích rõ); bộ tách từ tự huấn luyện đạt fertility

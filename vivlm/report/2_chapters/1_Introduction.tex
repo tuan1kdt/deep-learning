@@ -56,9 +56,9 @@ như vòng đời của các mô hình sinh hiện đại.
 Đề tài đặt bốn câu hỏi, tương ứng bốn cụm thí nghiệm ở chương~\ref{chap:experiments}:
 \begin{enumerate}
 	\item Tiền huấn luyện từ đầu một mô hình 101M tham số kiến trúc Llama-style
-	      trên khoảng 3 tỷ token tiếng Việt, bằng đúng một GPU 24\,GB, đạt được
-	      chất lượng ngôn ngữ đến đâu (đường cong loss, perplexity,
-	      bits-per-character so với baseline GPT-2 tiếng Việt huấn luyện sẵn)?
+	      trên khoảng 3 tỷ token tiếng Việt, ở quy mô một GPU, đạt được chất
+	      lượng ngôn ngữ đến đâu (đường cong loss, perplexity, bits-per-character
+	      so với baseline GPT-2 tiếng Việt huấn luyện sẵn)?
 	\item Bộ tách từ BPE tự huấn luyện riêng cho tiếng Việt hiệu quả ra sao so
 	      với tokenizer của PhoGPT và của GPT-2 tiếng Anh (đo bằng fertility ---
 	      số token trung bình trên mỗi từ)?
@@ -71,11 +71,6 @@ như vòng đời của các mô hình sinh hiện đại.
 	      ngữ tự pretrain không?
 \end{enumerate}
 
-Ngoài ra, đề tài có một mục tiêu hạ tầng tường minh: \emph{sử dụng trọn} tài
-nguyên của máy huấn luyện (GPU 24\,GB) --- cả về mức chiếm dụng tính toán lẫn
-bộ nhớ --- trong khoảng một ngày GPU, với nhật ký \texttt{nvidia-smi} ghi mỗi
-30 giây làm bằng chứng định lượng (mục~\ref{sec:exp-gpu}).
-
 Ràng buộc tự đặt, kế thừa từ hai đồ án trước: \emph{tự cài đặt} toàn bộ phần
 học được --- khối transformer (RoPE, RMSNorm, SwiGLU, attention nhân quả),
 vòng lặp huấn luyện ba giai đoạn, bộ tách từ, projector --- không dùng
@@ -86,16 +81,17 @@ dùng để nạp bộ mã hóa SigLIP đóng băng và mô hình baseline khi �
 
 Đóng góp chính của báo cáo: (i) một pipeline hoàn chỉnh, kiểm thử được
 (52 unit test chạy ngoại tuyến), tái lập được, đưa một mô hình ngôn ngữ tiếng
-Việt từ dữ liệu web thô đến VLM biết trả lời bằng tiếng Việt trên một GPU;
-(ii) các đo đạc định lượng về chất lượng ngôn ngữ, hiệu quả tokenizer, chất
-lượng đa phương thức và hiệu suất phần cứng ở quy mô ``nano''; (iii) một bộ
-bài học hạ tầng thực tế (huấn luyện dài ngày trên WSL2, khôi phục checkpoint
-chính xác từng bit, \texttt{torch.compile} trên kiến trúc GPU mới).
+Việt từ dữ liệu web thô đến VLM biết trả lời bằng tiếng Việt ở quy mô một GPU;
+(ii) các đo đạc định lượng về chất lượng ngôn ngữ, hiệu quả tokenizer và chất
+lượng đa phương thức ở quy mô ``nano''; (iii) phân tích mối liên hệ giữa bộ
+tách từ bản ngữ và hiệu quả nén (bits-per-character) --- cho thấy vì sao một
+mô hình nhỏ tự pretrain vẫn vượt baseline về nén ký tự tiếng Việt.
 
 Báo cáo gồm 5 chương. Chương~\ref{chap:background} trình bày cơ sở lý thuyết:
 mô hình ngôn ngữ tự hồi quy, các thành phần kiến trúc Llama-style, BPE, quy
 luật scaling, hợp nhất thị giác kiểu LLaVA, SFT và SCST, cùng các công trình
 liên quan. Chương~\ref{chap:methods} mô tả dữ liệu, kiến trúc và cấu hình
 huấn luyện ba giai đoạn. Chương~\ref{chap:experiments} trình bày kết quả định
-lượng và định tính kèm phân tích hiệu suất phần cứng.
+lượng và định tính kèm bàn luận. Chương~\ref{chap:conclusion} kết luận, nêu
+hạn chế và hướng phát triển.
 Chương~\ref{chap:conclusion} kết luận, nêu hạn chế và hướng phát triển.

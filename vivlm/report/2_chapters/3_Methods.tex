@@ -112,11 +112,10 @@ Embedding trói trọng số với lớp đầu ra.
 
 Bảng~\ref{tab:pretrain-hp} liệt kê siêu tham số. Batch hiệu dụng 491.520
 token/bước đạt bằng tích lũy gradient: 40 chuỗi $\times$ 1.024 token
-$\times$ 12 lần tích lũy; kích thước micro-batch 40 được chọn bằng đo đạc
-thực nghiệm để lấp 91\% VRAM (mục~\ref{sec:exp-gpu}). 6.000 bước tương ứng
-$\approx$2,95 tỷ token ($\approx$0,98 epoch --- mỗi mẫu chỉ được thấy xấp xỉ
-một lần). Toàn bộ chạy \texttt{bfloat16} (autocast) với
-\texttt{torch.compile} \autocite{ansel2024pytorch2}.
+$\times$ 12 lần tích lũy. 6.000 bước tương ứng $\approx$2,95 tỷ token
+($\approx$0,98 epoch --- mỗi mẫu chỉ được thấy xấp xỉ một lần). Toàn bộ chạy
+\texttt{bfloat16} (autocast) với \texttt{torch.compile}
+\autocite{ansel2024pytorch2}.
 
 \begin{table}[H]
 	\centering
@@ -235,20 +234,17 @@ loss là
 với mặt nạ cắt tại \texttt{<|endoftext|>} đầu tiên của từng chuỗi trong
 batch. Chạy 400 bước, learning rate $10^{-5}$, tối đa 40 token sinh mới.
 
-\section{Hạ tầng, kiểm thử và đo đạc}
+\section{Cài đặt và kiểm thử}
 \label{sec:met-infra}
 
-Toàn bộ huấn luyện chạy trên một máy trạm từ xa: GPU NVIDIA RTX PRO 4000
-Blackwell 24\,GB, 24 lõi CPU, 31\,GB RAM, môi trường WSL2 (Ubuntu trên
-Windows), PyTorch 2.11/CUDA 12.8; phiên dài chạy trong \texttt{tmux} để sống
-sót qua đứt kết nối SSH. Phát triển và kiểm thử trên máy cá nhân không GPU:
-\textbf{52 unit test} chạy ngoại tuyến (mô hình thu nhỏ, bộ mã hóa thị giác
-giả lập, dữ liệu tự sinh) khóa các bất biến quan trọng --- RoPE bảo toàn
-chuẩn, mặt nạ nhân quả, đếm đúng 100.682.496 tham số, trói trọng số, che nhãn
-SFT đúng vị trí, khôi phục checkpoint chính xác từng bit, căn chỉnh
-log-xác suất SCST qua 49 token ảnh, và một test hồi quy cho lỗi đường dẫn ảnh
-phát hiện khi rà soát chéo. Suốt quá trình huấn luyện, một tiến trình phụ ghi
-mức sử dụng GPU và VRAM mỗi 30 giây (\texttt{nvidia-smi}) --- nguồn số liệu
-cho phân tích hiệu suất ở mục~\ref{sec:exp-gpu}. Khi đánh giá sinh chuỗi bằng
+Toàn bộ phần học được (khối transformer, projector, ba vòng lặp huấn luyện,
+bộ tách từ) được cài đặt từ đầu bằng PyTorch, không dùng \texttt{transformers}
+của Hugging Face cho phần ngôn ngữ. Pipeline được phát triển kiểu test-driven:
+\textbf{52 unit test} chạy ngoại tuyến trên máy cá nhân không GPU (mô hình thu
+nhỏ, bộ mã hóa thị giác giả lập, dữ liệu tự sinh), khóa các bất biến quan
+trọng --- RoPE bảo toàn chuẩn, mặt nạ nhân quả, đếm đúng 100.682.496 tham số,
+trói trọng số, che nhãn SFT đúng vị trí, khôi phục checkpoint chính xác từng
+bit, căn chỉnh log-xác suất SCST qua 49 token ảnh, và một test hồi quy cho một
+lỗi đường dẫn ảnh phát hiện khi rà soát chéo. Khi đánh giá sinh chuỗi bằng
 beam search, điểm mỗi beam được chuẩn hóa theo độ dài (mũ 0,7) để tránh thiên
 vị câu ngắn.

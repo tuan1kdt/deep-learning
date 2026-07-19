@@ -50,8 +50,8 @@ $\mathrm{softmax}(QK^\top/\sqrt{d_k})V$ với mặt nạ \emph{nhân quả} ch�
 trí tương lai, bảo đảm tính tự hồi quy của~\eqref{eq:autoregressive}. Cài đặt
 dùng \texttt{scaled\_dot\_product\_attention} của PyTorch, tự kích hoạt nhân
 FlashAttention \autocite{dao2022flashattention} --- tính attention chính xác
-nhưng không ghi ma trận $T \times T$ ra bộ nhớ, yếu tố quyết định để đẩy
-kích thước batch lên cao trong 24\,GB VRAM.
+nhưng không ghi ma trận $T \times T$ ra bộ nhớ, giúp giảm mạnh chi phí bộ nhớ
+khi độ dài chuỗi lớn.
 
 \subsection{Ba nâng cấp Llama-style so với GPT-2}
 
