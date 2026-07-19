@@ -14,10 +14,10 @@ test của cuộc thi VLSP không công bố đáp án); văn bản chuẩn hóa
 khoảng trắng trước khi chấm --- nhất quán cho mọi hệ được so sánh. Giải mã so
 sánh giữa tham lam và beam search $k{=}3$ (chuẩn hóa độ dài mũ 0,7).
 
-\textbf{Ghi chú trạng thái.} Tại thời điểm chốt bản thảo này, giai đoạn tiền
-huấn luyện đang chạy (đã qua $1/10$ lịch trình); các ô đánh dấu \TBD{} và
-hình placeholder sẽ được điền từ \texttt{vivlm/outputs/} ngay khi các giai
-đoạn hoàn tất, không thay đổi cấu trúc báo cáo.
+\textbf{Ghi chú trạng thái.} Giai đoạn tiền huấn luyện đã hoàn tất (kết quả ở
+mục~\ref{sec:exp-pretrain}--\ref{sec:exp-tokenizer} và~\ref{sec:exp-gpu});
+các ô \TBD{} còn lại thuộc giai đoạn SFT/SCST đang chạy, được điền từ
+\texttt{vivlm/outputs/} khi hoàn tất.
 
 \section{Kết quả tiền huấn luyện}
 \label{sec:exp-pretrain}
@@ -25,20 +25,21 @@ hình placeholder sẽ được điền từ \texttt{vivlm/outputs/} ngay khi c�
 \subsection{Đường cong học}
 
 Hình~\ref{fig:pretrain-loss} trình bày loss huấn luyện và kiểm định theo số
-bước. Ba quan sát định lượng ở giai đoạn đã chạy: (i)~loss khởi điểm 10,09
-khớp giá trị lý thuyết của phân phối đều trên từ vựng
-($\ln 20.480 = 9{,}93$ cộng nhiễu khởi tạo) --- một phép ``sanity check'' cho
-cài đặt; (ii)~loss rơi rất nhanh trong nghìn bước đầu (val 4,37 tại bước 250;
-3,63 tại bước 500) rồi chuyển sang pha giảm chậm dạng lũy thừa đúng như quy
-luật scaling (mục~\ref{sec:bg-scaling}); (iii)~val bám sát train --- mô hình
-101M trên 3 tỷ token nằm sâu trong chế độ thiếu dữ liệu hơn là quá khớp, đúng
-kỳ vọng khi mỗi mẫu chỉ được thấy một lần.
+bước. Ba quan sát định lượng: (i)~loss khởi điểm 10,09 khớp giá trị lý thuyết
+của phân phối đều trên từ vựng ($\ln 20.480 = 9{,}93$ cộng nhiễu khởi tạo) ---
+một phép ``sanity check'' cho cài đặt; (ii)~loss rơi rất nhanh trong nghìn
+bước đầu (val 4,37 tại bước 250; 3,63 tại bước 500) rồi chuyển sang pha giảm
+chậm dạng lũy thừa đúng như quy luật scaling (mục~\ref{sec:bg-scaling}), về
+2,62 ở bước cuối; (iii)~val bám sát train (thậm chí thấp hơn nhẹ) suốt quá
+trình --- mô hình 101M trên 3 tỷ token nằm sâu trong chế độ thiếu dữ liệu hơn
+là quá khớp, đúng kỳ vọng khi mỗi mẫu chỉ được thấy một lần.
 
 \begin{figure}[H]
 	\centering
-	\placeholderfig{12cm}{6.5cm}
+	\includegraphics[width=0.85\textwidth]{figs/results/pretrain_loss.png}
 	\caption{Loss huấn luyện (đường liền) và kiểm định (điểm) theo số bước,
-	6.000 bước $\approx$ 2,95 tỷ token. Nguồn: \texttt{pretrain\_log.csv}.}
+	6.000 bước $\approx$ 2,95 tỷ token. Val giảm đơn điệu từ 4,37 (bước 250)
+	về 2,62 (bước 6.000). Nguồn: \texttt{pretrain\_log.csv}.}
 	\label{fig:pretrain-loss}
 \end{figure}
 
@@ -46,17 +47,34 @@ kỳ vọng khi mỗi mẫu chỉ được thấy một lần.
 	\centering
 	\caption{Chất lượng ngôn ngữ nội tại của ViGPT-nano sau tiền huấn luyện,
 	so với baseline GPT-2 tiếng Việt huấn luyện sẵn. PPL không so được giữa hai
-	tokenizer khác nhau nên cột so sánh dùng BPC (mục~\ref{sec:bg-lm}).}
+	tokenizer khác nhau nên cột so sánh dùng BPC (mục~\ref{sec:bg-lm}), đo đối
+	xứng trên cùng 464 nghìn ký tự văn bản kiểm định sạch, mỗi mô hình dùng
+	tokenizer của chính nó.}
 	\label{tab:ppl-bpc}
 	\begin{tabular}{lccc}
 		\hline
 		\textbf{Mô hình} & \textbf{Tham số} & \textbf{PPL (val)} & \textbf{BPC} \\
 		\hline
-		ViGPT-nano (đề tài) & 101M & \TBD & \TBD \\
-		NlpHUST/gpt2-vietnamese \autocite{nlphust2021gpt2vi} & 124M & (khác tokenizer) & \TBD \\
+		ViGPT-nano (đề tài) & 101M & 13,91 & \textbf{0,987} \\
+		NlpHUST/gpt2-vietnamese \autocite{nlphust2021gpt2vi} & 124M & $\approx$13,8$^\dagger$ & 3,329 \\
 		\hline
+		\multicolumn{4}{l}{\footnotesize $\dagger$ PPL của baseline tính trên
+		tokenizer riêng, chỉ để đối chiếu độ khó mỗi token --- xem diễn giải.} \\
 	\end{tabular}
 \end{table}
+
+Con số đáng bàn: BPC của ViGPT-nano ($0{,}987$) thấp hơn baseline ($3{,}329$)
+tới $3{,}4$ lần --- một biên độ lớn bất thường cần được giải thích thay vì
+nhận là ``thắng''. Nguyên nhân gần như hoàn toàn nằm ở \emph{bộ tách từ}:
+kiểm tra trực tiếp cho thấy NlpHUST/gpt2-vietnamese dùng nguyên tokenizer
+byte-level của GPT-2 tiếng Anh (từ vựng 50.257, fertility 3,97 token/từ ở
+bảng~\ref{tab:fertility}), trong khi ViGPT-nano dùng BPE tiếng Việt tự huấn
+luyện (fertility 1,16). Quy đổi ngược, \emph{độ khó mỗi token} (perplexity)
+của hai mô hình xấp xỉ nhau ($\approx$13,8 so với 13,91); toàn bộ chênh lệch
+BPC đến từ việc tokenizer tiếng Anh phải chi $\approx$3,4 lần nhiều token hơn
+cho mỗi ký tự tiếng Việt. Đây chính là minh chứng định lượng cho giá trị của
+một tokenizer bản ngữ: cùng năng lực dự đoán mỗi token, mô hình có tokenizer
+tiếng Việt nén văn bản hiệu quả hơn hẳn tính trên ký tự.
 
 \subsection{Chất lượng định tính}
 
@@ -75,9 +93,9 @@ nano (so sánh: nanoVLM \autocite{wiedmann2025nanovlm} chọn backbone SmolLM2
 		\hline
 		\textbf{Câu mồi} & \textbf{Văn bản sinh (trích)} \\
 		\hline
-		``Hà Nội là'' & \TBD \\
-		``Trí tuệ nhân tạo'' & \TBD \\
-		``Món phở'' & \TBD \\
+		``Hà Nội là'' & \emph{\ldots vùng đất có nhiều di tích lịch sử -- văn hóa. Với các di tích lịch sử -- văn hóa được xếp hạng, chúng ta đã và đang gìn giữ, bảo vệ và phát huy giá trị của di tích một cách trọn vẹn.} \\
+		``Trí tuệ nhân tạo'' & \emph{\ldots của Google để giữ cho công việc kinh doanh của bạn không bị ảnh hưởng bởi các yêu cầu khách hàng mới. Những yếu tố quan trọng nhất ảnh hưởng đến kết quả tìm kiếm của Google bao gồm\ldots} \\
+		``Món phở bò'' & \emph{\ldots nướng cà ri cơm này, vừa ngon, vừa bổ, lại thơm ngon nữa đấy. Cơm cuộn chay là món ăn đặc biệt được nhiều người yêu thích, được bày bán khắp các chợ mạng, quán ăn Việt Nam.} \\
 		\hline
 	\end{tabularx}
 \end{table}
@@ -86,10 +104,13 @@ nano (so sánh: nanoVLM \autocite{wiedmann2025nanovlm} chọn backbone SmolLM2
 \label{sec:exp-tokenizer}
 
 Bảng~\ref{tab:fertility} so sánh fertility trên cùng một mẫu văn bản tiếng
-Việt giữ lại từ corpus. Hai giả thuyết cần kiểm chứng: (i)~tokenizer tự huấn
-luyện đạt fertility xấp xỉ PhoGPT (cùng cỡ từ vựng, cùng byte-level, khác
-dữ liệu huấn luyện); (ii)~tokenizer GPT-2 tiếng Anh chịu fertility cao hơn
-hẳn do phải phân rã ký tự có dấu về byte.
+Việt giữ lại từ corpus. Kết quả xác nhận cả hai giả thuyết đặt ra:
+(i)~tokenizer tự huấn luyện đạt fertility 1,160 --- ngang PhoGPT (1,166, cùng
+cỡ từ vựng, cùng byte-level, khác dữ liệu huấn luyện), cho thấy 0,35\,GB văn
+bản là đủ để BPE học thống kê cặp byte tiếng Việt; (ii)~tokenizer GPT-2 tiếng
+Anh chịu fertility 3,970 --- cao gấp $3{,}4$ lần do phải phân rã ký tự có dấu
+về nhiều byte. Con số 3,4 lần này chính là hệ số giải thích khoảng cách BPC ở
+bảng~\ref{tab:ppl-bpc}.
 
 \begin{table}[H]
 	\centering
@@ -99,9 +120,9 @@ hẳn do phải phân rã ký tự có dấu về byte.
 		\hline
 		\textbf{Tokenizer} & \textbf{Từ vựng} & \textbf{Fertility} \\
 		\hline
-		BPE tự huấn luyện (đề tài) & 20.480 & \TBD \\
-		PhoGPT \autocite{nguyen2023phogpt} & 20.480 & \TBD \\
-		GPT-2 (tiếng Anh) \autocite{radford2019gpt2} & 50.257 & \TBD \\
+		BPE tự huấn luyện (đề tài) & 20.480 & \textbf{1,160} \\
+		PhoGPT \autocite{nguyen2023phogpt} & 20.480 & 1,166 \\
+		GPT-2 (tiếng Anh) \autocite{radford2019gpt2} & 50.257 & 3,970 \\
 		\hline
 	\end{tabular}
 \end{table}
@@ -183,7 +204,7 @@ chỉnh cấu hình (mỗi dòng: 15--20 bước đo trên chính dữ liệu th
 		Eager, micro-batch 32 & $\approx$34.000 & 26,1\,GB & tràn sang RAM hệ thống \\
 		\texttt{compile}, micro-batch 32 & 78.500 & 18,1\,GB & \\
 		\texttt{compile}, micro-batch 40 & 82.800 & 22,2\,GB (91\%) & \textbf{cấu hình chọn} \\
-		Run chính thức (ổn định) & 99.000--100.000 & 22,2\,GB & util GPU 100\% \\
+		Run chính thức (tức thời) & 99.000--100.000 & 22,2\,GB & util GPU 100\% \\
 		\hline
 	\end{tabular}
 \end{table}
@@ -196,15 +217,19 @@ sang RAM hệ thống qua cơ chế của WSL và kéo thông lượng xuống c
 ba. \textbf{Hai}, thông lượng \emph{tăng} theo kích thước micro-batch
 (78,5k $\to$ 82,8k khi 32 $\to$ 40): GPU càng được cho nhiều việc một lúc
 càng hiệu quả --- lập luận nền tảng của việc ``lấp đầy'' VRAM. \textbf{Ba},
-với 491.520 token/bước, 6.000 bước và $\approx$100k token/giây, giai đoạn
-tiền huấn luyện chiếm $\approx$8,5 giờ GPU thuần --- cộng các giai đoạn
-SFT/SCST và đánh giá, tổng ngân sách nằm trong một ngày GPU như thiết kế.
+với 491.520 token/bước và 6.000 bước, giai đoạn tiền huấn luyện chạy trọn
+trong \textbf{9 giờ 41 phút} (22:06 đến 07:47, thông lượng cumulative
+$\approx$90k token/giây khi tính cả thời gian đánh giá và ghi checkpoint),
+loss cuối 2,61 --- cộng các giai đoạn SFT/SCST và đánh giá, tổng ngân sách
+nằm trong một ngày GPU như thiết kế.
 
 \begin{figure}[H]
 	\centering
-	\placeholderfig{13cm}{6cm}
-	\caption{Mức sử dụng GPU (\%) và VRAM (GiB) theo thời gian, ghi mỗi 30
-	giây qua \texttt{nvidia-smi}, phủ trọn ba giai đoạn huấn luyện.}
+	\includegraphics[width=0.9\textwidth]{figs/results/gpu_util.png}
+	\caption{Mức sử dụng GPU (\%, trục trái) và VRAM (GiB, trục phải) theo thời
+	gian trong giai đoạn tiền huấn luyện, ghi mỗi 30 giây qua
+	\texttt{nvidia-smi}. Util duy trì gần 100\% và VRAM ổn định 22,2\,GB suốt
+	$\approx$9,7 giờ.}
 	\label{fig:gpu-util}
 \end{figure}
 
