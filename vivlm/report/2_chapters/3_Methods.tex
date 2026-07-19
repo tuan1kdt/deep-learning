@@ -135,15 +135,15 @@ $\times$ 12 lần tích lũy. 6.000 bước tương ứng $\approx$2,95 tỷ tok
 	\end{tabular}
 \end{table}
 
-Vì phiên huấn luyện kéo dài nhiều giờ trên hạ tầng từ xa, tính
-\textbf{khôi phục chính xác} được thiết kế và kiểm thử tường minh: checkpoint
-lưu đủ trọng số, trạng thái optimizer, bước hiện tại và \emph{mọi trạng thái
-sinh số ngẫu nhiên} (bộ sinh lấy mẫu dữ liệu, RNG của PyTorch trên CPU lẫn
-GPU). Unit test khóa bất biến ``huấn luyện 6 bước liền mạch $=$ huấn luyện 3
-bước + khôi phục + 3 bước'' chính xác đến từng bit trọng số. Một lỗi thực tế
-đáng ghi nhận: tensor trạng thái RNG bị \texttt{map\_location} đưa lên GPU khi
-nạp checkpoint, trong khi API khôi phục đòi hỏi tensor CPU --- lỗi chỉ phát lộ
-trên máy GPU, được vá và khóa bằng test riêng.
+Vì phiên huấn luyện kéo dài nhiều giờ, tính \textbf{khôi phục chính xác} được
+thiết kế và kiểm thử tường minh: checkpoint lưu đủ trọng số, trạng thái
+optimizer, bước hiện tại và \emph{mọi trạng thái sinh số ngẫu nhiên} (bộ sinh
+lấy mẫu dữ liệu và RNG của PyTorch trên mọi thiết bị). Unit test khóa bất biến
+``huấn luyện 6 bước liền mạch $=$ huấn luyện 3 bước + khôi phục + 3 bước''
+chính xác đến từng bit trọng số. Một lỗi thực tế đáng ghi nhận: tensor trạng
+thái RNG bị \texttt{map\_location} chuyển sang thiết bị tăng tốc khi nạp
+checkpoint, trong khi API khôi phục đòi hỏi tensor trên CPU --- được vá và
+khóa bằng test riêng.
 
 \section{Hợp nhất thị giác và SFT (giai đoạn B)}
 \label{sec:met-fusion}
@@ -240,8 +240,8 @@ batch. Chạy 400 bước, learning rate $10^{-5}$, tối đa 40 token sinh mớ
 Toàn bộ phần học được (khối transformer, projector, ba vòng lặp huấn luyện,
 bộ tách từ) được cài đặt từ đầu bằng PyTorch, không dùng \texttt{transformers}
 của Hugging Face cho phần ngôn ngữ. Pipeline được phát triển kiểu test-driven:
-\textbf{52 unit test} chạy ngoại tuyến trên máy cá nhân không GPU (mô hình thu
-nhỏ, bộ mã hóa thị giác giả lập, dữ liệu tự sinh), khóa các bất biến quan
+\textbf{52 unit test} chạy ngoại tuyến trên máy cá nhân chỉ dùng CPU (mô hình
+thu nhỏ, bộ mã hóa thị giác giả lập, dữ liệu tự sinh), khóa các bất biến quan
 trọng --- RoPE bảo toàn chuẩn, mặt nạ nhân quả, đếm đúng 100.682.496 tham số,
 trói trọng số, che nhãn SFT đúng vị trí, khôi phục checkpoint chính xác từng
 bit, căn chỉnh log-xác suất SCST qua 49 token ảnh, và một test hồi quy cho một

@@ -209,7 +209,7 @@ memmap dữ liệu); báo cáo kế thừa tinh thần tối giản này nhưng 
 kiến trúc Llama-style và tiếng Việt. Với tiếng Việt,
 NlpHUST/gpt2-vietnamese \autocite{nlphust2021gpt2vi} (GPT-2 huấn luyện trên
 tin tức) được dùng làm baseline BPC, còn PhoGPT-4B \autocite{nguyen2023phogpt}
---- tiền huấn luyện từ đầu 3,7B tham số trên cụm nhiều GPU --- là mốc trên
+--- tiền huấn luyện từ đầu 3,7B tham số trên hạ tầng tính toán lớn --- là mốc trên
 tham khảo và nguồn đối chứng thiết kế tokenizer.
 
 \textbf{VLM nhỏ và VLM tiếng Việt.} nanoVLM \autocite{wiedmann2025nanovlm}
@@ -219,7 +219,7 @@ quy mô, nhưng \emph{mượn} LLM tiếng Anh huấn luyện sẵn. LaVy
 tiếng Việt công bố sớm, đều xây trên LLM đa ngôn ngữ tỷ tham số. Bảng
 \ref{tab:related} định vị ViVLM-nano: khoảng trống mà đề tài nhắm tới là tổ
 hợp \emph{tự pretrain phần ngôn ngữ} + \emph{tiếng Việt} + \emph{trọn pipeline
-ba giai đoạn} + \emph{một GPU}.
+ba giai đoạn} + \emph{quy mô nhỏ}.
 
 \begin{table}[H]
 	\centering
@@ -232,10 +232,10 @@ ba giai đoạn} + \emph{một GPU}.
 		\hline
 		nanoGPT & tự pretrain (tiếng Anh) & --- & --- & --- \\
 		NlpHUST GPT-2 & tự pretrain & \checkmark & --- & --- \\
-		PhoGPT-4B & tự pretrain (3,7B, đa GPU) & \checkmark & --- & --- \\
+		PhoGPT-4B & tự pretrain (3,7B, hạ tầng lớn) & \checkmark & --- & --- \\
 		nanoVLM & SmolLM2 huấn luyện sẵn & --- & \checkmark & --- \\
 		LaVy / Vintern-1B & LLM tỷ tham số sẵn & \checkmark & \checkmark & --- \\
-		\textbf{ViVLM-nano} & \textbf{tự pretrain (101M, 1 GPU)} & \checkmark & \checkmark & \checkmark \\
+		\textbf{ViVLM-nano} & \textbf{tự pretrain (101M, quy mô nhỏ)} & \checkmark & \checkmark & \checkmark \\
 		\hline
 	\end{tabularx}
 \end{table}

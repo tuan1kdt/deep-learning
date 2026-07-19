@@ -5,7 +5,8 @@ Báo cáo này xây dựng \textbf{ViVLM-nano} --- một mô hình ngôn ngữ--
 (vision--language model, VLM) tiếng Việt cỡ nhỏ mà \emph{toàn bộ phần ngôn ngữ
 được tiền huấn luyện từ token đầu tiên}, thay vì mượn một mô hình ngôn ngữ huấn
 luyện sẵn như các VLM tiếng Việt hiện có (LaVy, Vintern-1B). Hệ thống đi trọn
-vòng đời huấn luyện của một mô hình sinh hiện đại ở quy mô một GPU:
+vòng đời huấn luyện của một mô hình sinh hiện đại ở quy mô nhỏ, tài nguyên
+tính toán hạn chế:
 (i)~\emph{tiền huấn luyện} một mô hình decoder-only 101 triệu tham số kiến trúc
 Llama-style (RoPE, RMSNorm, SwiGLU) trên 3,02 tỷ token tiếng Việt lọc chất lượng
 từ FineWeb2-HQ, với bộ tách từ BPE 20.480 mục tự huấn luyện;

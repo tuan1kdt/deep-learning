@@ -8,8 +8,8 @@ giác tiếng Việt mà phần ngôn ngữ 101 triệu tham số được tiề
 token đầu tiên trên 3,02 tỷ token FineWeb2-HQ (val loss 2,61, PPL 13,91), sau
 đó hợp nhất thị giác kiểu LLaVA (SigLIP đóng băng, projector pixel-shuffle),
 tinh chỉnh có giám sát hai pha (CIDEr UIT-ViIC 0,325) và tinh chỉnh học tăng
-cường SCST (nâng CIDEr thêm 0,068) --- toàn bộ ở quy mô một GPU. Cùng đồ án
-giữa kỳ (nhánh phân loại) và đồ án cuối kỳ
+cường SCST (nâng CIDEr thêm 0,068) --- toàn bộ ở quy mô một máy đơn. Cùng đồ
+án giữa kỳ (nhánh phân loại) và đồ án cuối kỳ
 (nhánh sinh có điều kiện đơn phương thức), đề tài khép kín sơ đồ kiến trúc đa
 phương thức của môn học ở phần trung tâm nhất: hợp nhất hai luồng token và
 chuỗi huấn luyện pretrain--SFT--RL.
@@ -24,7 +24,7 @@ cuối cùng.
 
 Bốn hạn chế chính. \textbf{Quy mô}: 101M tham số và 3 tỷ token đặt trần thấp
 cho kiến thức thế giới --- đặc biệt lộ ở hỏi--đáp mở; kết quả không nhằm cạnh
-tranh các VLM tỷ tham số mà nhằm định lượng ``một GPU làm được đến đâu''.
+tranh các VLM tỷ tham số mà nhằm định lượng ``một hệ quy mô nhỏ làm được đến đâu''.
 \textbf{Dữ liệu SFT}: 77 nghìn mẫu là nhỏ so với hàng triệu mẫu của các VLM
 công bố; hai bộ mô tả ảnh lệch miền (thể thao, đời sống) nên khả năng khái
 quát ngoài miền chưa được đo. \textbf{Đánh giá}: chưa có đối chiếu trên

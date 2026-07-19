@@ -10,10 +10,10 @@ lấy một mô hình ngôn ngữ lớn (LLM) đã tiền huấn luyện, ghép 
 thị giác, rồi tinh chỉnh để hai phương thức ``nói chuyện'' được với nhau. Công
 thức này hiệu quả, nhưng với người học nó có một điểm mù: phần quan trọng
 nhất --- \emph{cái LLM được tiền huấn luyện ra sao} --- luôn nằm trong hộp đen
-của các tổ chức có hàng nghìn GPU.
+của các tổ chức có tài nguyên tính toán khổng lồ.
 
 Báo cáo này lấp điểm mù đó bằng cách làm ngược lại: \textbf{tự tiền huấn luyện
-phần ngôn ngữ từ token đầu tiên}, ở quy mô mà một GPU 24\,GB xử lý được trong
+phần ngôn ngữ từ token đầu tiên}, ở quy mô mà một máy đơn xử lý được trong
 khoảng nửa ngày, rồi mới ghép thị giác và đi tiếp các bước tinh chỉnh có giám
 sát (SFT) và học tăng cường (RL). Sản phẩm là \textbf{ViVLM-nano}: một VLM
 tiếng Việt 101 triệu tham số ngôn ngữ, nhận ảnh kèm câu lệnh tiếng Việt và sinh
@@ -29,7 +29,7 @@ VLM tiếng Việt hiện có (LaVy \autocite{tran2024lavy}, Vintern-1B
 \autocite{doan2024vintern}) đều dựa trên LLM đa ngôn ngữ tỷ tham số huấn luyện
 sẵn --- theo khảo sát của tôi, chưa có công bố nào đi trọn đường
 \emph{tự pretrain tiếng Việt} $\rightarrow$ \emph{ghép thị giác} $\rightarrow$
-\emph{SFT} $\rightarrow$ \emph{RL} ở quy mô một GPU.
+\emph{SFT} $\rightarrow$ \emph{RL} ở quy mô một máy đơn.
 
 \section{Vị trí đề tài trong sơ đồ kiến trúc đa phương thức của môn học}
 \label{sec:intro-diagram}
@@ -56,7 +56,7 @@ như vòng đời của các mô hình sinh hiện đại.
 Đề tài đặt bốn câu hỏi, tương ứng bốn cụm thí nghiệm ở chương~\ref{chap:experiments}:
 \begin{enumerate}
 	\item Tiền huấn luyện từ đầu một mô hình 101M tham số kiến trúc Llama-style
-	      trên khoảng 3 tỷ token tiếng Việt, ở quy mô một GPU, đạt được chất
+	      trên khoảng 3 tỷ token tiếng Việt, ở quy mô nhỏ, đạt được chất
 	      lượng ngôn ngữ đến đâu (đường cong loss, perplexity, bits-per-character
 	      so với baseline GPT-2 tiếng Việt huấn luyện sẵn)?
 	\item Bộ tách từ BPE tự huấn luyện riêng cho tiếng Việt hiệu quả ra sao so
@@ -81,7 +81,7 @@ dùng để nạp bộ mã hóa SigLIP đóng băng và mô hình baseline khi �
 
 Đóng góp chính của báo cáo: (i) một pipeline hoàn chỉnh, kiểm thử được
 (52 unit test chạy ngoại tuyến), tái lập được, đưa một mô hình ngôn ngữ tiếng
-Việt từ dữ liệu web thô đến VLM biết trả lời bằng tiếng Việt ở quy mô một GPU;
+Việt từ dữ liệu web thô đến VLM biết trả lời bằng tiếng Việt ở quy mô nhỏ;
 (ii) các đo đạc định lượng về chất lượng ngôn ngữ, hiệu quả tokenizer và chất
 lượng đa phương thức ở quy mô ``nano''; (iii) phân tích mối liên hệ giữa bộ
 tách từ bản ngữ và hiệu quả nén (bits-per-character) --- cho thấy vì sao một

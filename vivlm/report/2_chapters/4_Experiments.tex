@@ -136,7 +136,7 @@ cao (1,943) nhưng chủ yếu do câu trả lời VQA rất ngắn (thường 1
 CIDEr một-tham-chiếu dễ đạt trị lớn --- BLEU-4 0,279 là chỉ số phản ánh sát
 hơn. So sánh tuyệt đối: các số này thấp hơn baseline công bố của UIT-ViIC
 (dùng mô hình lớn hơn và LM huấn luyện sẵn), đúng như định hướng ``đo xem một
-GPU làm được đến đâu'' chứ không nhằm cạnh tranh trực tiếp.
+hệ quy mô nhỏ làm được đến đâu'' chứ không nhằm cạnh tranh trực tiếp.
 
 \begin{table}[H]
 	\centering
@@ -209,7 +209,7 @@ rằng SCST tác động vào chiến lược sinh nhiều hơn là vào biểu 
 
 Đối chiếu bốn câu hỏi nghiên cứu (mục~\ref{sec:intro-diagram}) với kết quả:
 
-\textbf{Câu hỏi 1 (chất lượng ngôn ngữ).} Tiền huấn luyện từ đầu trên một GPU
+\textbf{Câu hỏi 1 (chất lượng ngôn ngữ).} Tiền huấn luyện từ đầu ở quy mô nhỏ
 đạt val loss 2,61 và PPL 13,91 --- đủ để mô hình sinh văn xuôi tiếng Việt
 đúng ngữ pháp, mạch lạc cục bộ (bảng~\ref{tab:samples}). Đường loss tuân thủ
 quy luật lũy thừa, val bám train, khẳng định pipeline pretrain vận hành đúng
@@ -237,8 +237,8 @@ thậm chí lớn hơn.
 
 \textbf{So với hướng ``mượn LLM sẵn''.} Về điểm số tuyệt đối, ViVLM-nano
 thấp hơn LaVy/Vintern-1B (xây trên LLM tỷ tham số huấn luyện sẵn) --- điều
-tất yếu khi phần ngôn ngữ chỉ 101M và tự pretrain trong nửa ngày GPU. Giá trị
-của đề tài không nằm ở việc vượt các hệ đó, mà ở chỗ định lượng \emph{trần
-năng lực của một GPU} cho trọn pipeline, và ở tính minh bạch: mọi tham số
+tất yếu khi phần ngôn ngữ chỉ 101M và tự pretrain trong khoảng nửa ngày. Giá
+trị của đề tài không nằm ở việc vượt các hệ đó, mà ở chỗ định lượng \emph{trần
+năng lực của một hệ quy mô nhỏ} cho trọn pipeline, và ở tính minh bạch: mọi tham số
 ngôn ngữ đều quan sát được từ dữ liệu thô đến checkpoint cuối, không có hộp
 đen pretrained ở phần cốt lõi.
